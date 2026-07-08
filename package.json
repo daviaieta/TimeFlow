@@ -1,7 +1,7 @@
 {
   "name": "fastify-prisma-boilerplate",
   "version": "1.0.0",
-  "description": "Boilerplate para APIs REST com Fastify + Prisma + SQLite",
+  "description": "Booking SaaS",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -13,14 +13,21 @@
     "db:generate": "prisma generate",
     "test": "node --import tsx --test src/**/*.test.ts"
   },
-  "keywords": ["fastify", "prisma", "sqlite", "boilerplate"],
+  "keywords": [
+    "fastify",
+    "prisma",
+    "sqlite",
+    "boilerplate"
+  ],
   "license": "MIT",
   "dependencies": {
     "@prisma/client": "^6.1.0",
+    "bcrypt": "^6.0.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.10.2",
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",

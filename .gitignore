@@ -37,3 +37,4 @@ node_modules/.prisma/
 *.tsbuildinfo
 
 PRD.md
+TASKS.md
