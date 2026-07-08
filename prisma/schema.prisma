@@ -1,8 +1,102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  EMPLOYEE
+}
+
+model Business {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  services Service[]
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business   Business? @relation(fields: [businessId], references: [id])
+  businessId Int?
+
+  availabilities Availability[]
+  services       EmployeeService[]
+}
+
+model Service {
+  id        Int      @id @default(autoincrement())
+  name      String
+  duration  Int
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  employees EmployeeService[]
+  bookings  Booking[]
+}
+
+model EmployeeService {
+  employee   User @relation(fields: [employeeId], references: [id])
+  employeeId Int
+
+  service   Service @relation(fields: [serviceId], references: [id])
+  serviceId Int
+
+  @@id([employeeId, serviceId])
+}
+
+model Availability {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  startTime String
+  endTime   String
+  isBooked  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee   User @relation(fields: [employeeId], references: [id])
+  employeeId Int
+
+  booking Booking?
+
+  @@unique([employeeId, date, startTime])
+}
+
+model Booking {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientName  String
+  clientPhone String
+  clientEmail String?
+
+  service   Service @relation(fields: [serviceId], references: [id])
+  serviceId Int
+
+  availability   Availability @relation(fields: [availabilityId], references: [id])
+  availabilityId Int          @unique
 }
