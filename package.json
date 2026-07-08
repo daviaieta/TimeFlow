@@ -1,0 +1,29 @@
+{
+  "name": "fastify-prisma-boilerplate",
+  "version": "1.0.0",
+  "description": "Boilerplate para APIs REST com Fastify + Prisma + SQLite",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate",
+    "test": "node --import tsx --test src/**/*.test.ts"
+  },
+  "keywords": ["fastify", "prisma", "sqlite", "boilerplate"],
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
