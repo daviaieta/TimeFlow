@@ -1,7 +1,7 @@
 {
-  "name": "fastify-prisma-boilerplate",
+  "name": "timeflow-api",
   "version": "1.0.0",
-  "description": "Booking SaaS",
+  "description": "Time Flow — SaaS multi-tenant de agendamentos",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
     "test": "node --import tsx --test src/**/*.test.ts"
   },
   "keywords": [
@@ -20,15 +21,22 @@
     "boilerplate"
   ],
   "license": "MIT",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/jwt": "^10.2.0",
     "@prisma/client": "^6.1.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^16.4.7",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "nodemailer": "^9.0.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^8.0.1",
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

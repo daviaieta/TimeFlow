@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Figtree } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const figtree = Figtree({subsets:['latin'],variable:'--font-sans'});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bookly — Agendamento online para o seu negócio",
+  title: "Time Flow — Agendamentos online para o seu negócio",
   description:
-    "Automatize seus agendamentos: seus clientes marcam online, recebem lembretes e sua agenda se organiza sozinha.",
+    "Página pública de agendamento para barbearias, salões e consultórios. O cliente escolhe serviço, profissional e horário — sem conflitos.",
 };
 
 export default function RootLayout({
@@ -25,8 +28,8 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="en"
+      className={cn("h-full", "scroll-smooth", "antialiased", geistSans.variable, geistMono.variable, "font-sans", figtree.variable)}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -1,8 +1,30 @@
 import "dotenv/config";
+import fastifyCors from "@fastify/cors";
+import fastifyJwt from "@fastify/jwt";
 import { fastify, FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import { env } from "./config/env";
 import { AppError } from "./lib/errors";
+import { authRoutes } from "./routes/authRoutes";
+import { businessRoutes } from "./routes/businessRoutes";
+import "./interfaces/auth";
 
-const app = fastify();
+const app = fastify({
+  ajv: {
+    customOptions: {
+      removeAdditional: true,
+      coerceTypes: true,
+      allErrors: true,
+    },
+  },
+});
+
+app.register(fastifyCors, {
+  origin: env.webOrigin,
+});
+
+app.register(fastifyJwt, {
+  secret: env.jwtSecret,
+});
 
 app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
   if (error instanceof AppError) {
@@ -18,13 +40,14 @@ app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: Fastif
 });
 
 app.get("/", async () => {
-  return { message: "Welcome to BOOKING SAAS" };
+  return { message: "Welcome to TIME FLOW" };
 });
 
-// REGISTER ROUTES HERE
+app.register(authRoutes);
+app.register(businessRoutes);
 
 app.listen({
-  port: 3333,
+  port: env.port,
 });
 
-console.log("Server running: http://localhost:3333");
+console.log(`Server running: http://localhost:${env.port}`);

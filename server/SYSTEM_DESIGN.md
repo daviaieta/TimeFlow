@@ -1,4 +1,4 @@
-# System Design — Booking SaaS
+# System Design — Time Flow
 
 > Documento de arquitetura da V1. Fontes de verdade: `PRD.md` (principal), `TASKS.md` (complementar)
 > e o código existente. Conflitos entre as três fontes estão destacados como **⚠️ Conflito**.
@@ -7,7 +7,7 @@
 
 ## 1. Visão Geral
 
-Booking SaaS é uma API REST multi-tenant de agendamentos para negócios de serviço
+Time Flow é uma API REST multi-tenant de agendamentos para negócios de serviço
 (barbearias, salões, consultórios). Cada `Business` opera isolado dentro da mesma
 aplicação e do mesmo banco, com seus próprios usuários, serviços e agenda.
 
@@ -186,12 +186,19 @@ Service 1 ── N Booking
 deliberada ou não, o PRD está desatualizado neste ponto (o mesmo vale para os campos
 `updatedAt` presentes em todos os modelos implementados, mas ausentes do PRD).
 
-**⚠️ Conflito — convites sem suporte no schema:** RF02/RF03 e `POST /auth/accept-invite`
-(Task 2.2) pressupõem um token de convite e um usuário "pendente de senha", mas o schema
-implementado não tem modelo `Invitation`, nem campo de token/status no `User`, e
-`User.password` é **obrigatório**. Não há como persistir o estado "convidado, sem senha"
-com o schema atual. Precisa de decisão: modelo `Invitation` próprio, campos no `User`
-(ex.: password nullable + inviteToken), ou token JWT stateless de convite.
+**✅ Resolvido — convites (Task 2.2, migração `20260716223121_add_invite_fields_to_user`):**
+`User.password` virou `String?`, e dois campos foram adicionados diretamente ao `User`:
+`inviteToken String? @unique` e `inviteTokenExpiresAt DateTime?`. Decisão tomada: campos
+direto no `User` em vez de uma tabela `Invitation` separada — menos peças, resolve o
+fluxo do PRD (RF02/RF03: o `User` é criado no momento do convite, com senha definida
+depois). Token opaco de 32 bytes (`crypto.randomBytes`, `src/lib/inviteToken.ts`), TTL de
+48h, invalidado (`inviteToken = null`) após o aceite — não pode ser reutilizado.
+`authService.login` trata `password` nulo como credencial inválida (mesma mensagem de
+erro genérica, evita enumeração de contas pendentes de convite). Trade-off aceito: sem
+histórico de convites reenviados/expirados — reenviar um convite hoje sobrescreve o
+token anterior (idempotente), sem registro do que foi substituído. Se a V1 vier a exigir
+listagem/reenvio auditável de convites, uma tabela `Invitation` resolve isso sem quebrar
+o que já existe.
 
 **⚠️ Conflito — avatar sem suporte no schema:** RF19 (upload de avatar para
 Admin/Employee) não tem campo correspondente (ex.: `User.avatarUrl`) no schema nem no
@@ -356,7 +363,7 @@ duplicada (RF12).
 | 1 | **Isolamento de tenant só em código** | Um filtro `businessId` esquecido num repository vaza dados entre tenants. Mitigação prevista: checagem dupla (middleware + service) e testes de autorização obrigatórios (Task 5.5). Alternativas (RLS, schema por tenant) estão fora do escopo do PRD. |
 | 2 | **WebSocket em memória, instância única** | Simples e suficiente para a V1, mas impede escala horizontal — segunda instância não receberia os broadcasts. Aceito conscientemente; um pub/sub externo seria mudança fora do escopo. |
 | 3 | **E-mail síncrono, sem fila** | Provedor lento degrada a latência das rotas que disparam e-mail. Aceito na V1 desde que o envio fique fora da transação e não bloqueie a resposta principal. |
-| 4 | **⚠️ Conflito: convites impossíveis no schema atual** | RF02/RF03 + Task 2.2 exigem usuário "sem senha, com token de convite"; o schema exige `password` e não tem token. Bloqueia a Fase 2/3.1 até decisão de modelagem (ver §5). |
+| 4 | **✅ Resolvido: convites** | `User.password` opcional + `inviteToken`/`inviteTokenExpiresAt` no próprio `User` (ver §5). Sem tabela de histórico de convites — reenvio sobrescreve o token anterior sem auditoria. |
 | 5 | **⚠️ Conflito: avatar sem campo no banco** | RF19 não tem onde persistir a referência do arquivo. Bloqueia a Task 5.3 até decisão de modelagem e de storage. |
 | 6 | **⚠️ Conflito: PRD desatualizado vs. schema** | `price Float` (PRD) vs. `Decimal(10,2)` (implementado); `updatedAt` só na implementação. O banco migrado é o estado real; o PRD precisa de atualização para não induzir erro. |
 | 7 | **`businessId` derivado por join em Availability/Booking** | Cada checagem de tenant e cada broadcast WS custa um join extra. Aceitável no volume da V1; desnormalizar seria alteração de modelo fora do escopo. |
