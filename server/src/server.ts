@@ -3,6 +3,7 @@ import fastifyCors from "@fastify/cors";
 import fastifyJwt from "@fastify/jwt";
 import { Prisma } from "@prisma/client";
 import { fastify, FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import { corsOptions } from "./config/cors";
 import { env } from "./config/env";
 import { AppError } from "./lib/errors";
 import { availabilityRoutes } from "./routes/availabilityRoutes";
@@ -22,9 +23,7 @@ const app = fastify({
   },
 });
 
-app.register(fastifyCors, {
-  origin: env.webOrigin,
-});
+app.register(fastifyCors, corsOptions);
 
 app.register(fastifyJwt, {
   secret: env.jwtSecret,
