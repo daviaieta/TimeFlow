@@ -5,6 +5,7 @@ export interface AvailabilityBody {
   date: string;
   startTime: string;
   endTime: string;
+  clientName?: string | null;
 }
 
 export interface AvailabilityParams {

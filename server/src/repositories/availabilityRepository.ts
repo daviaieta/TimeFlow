@@ -1,21 +1,24 @@
 import { prisma } from "../lib/prisma";
+import { AvailabilityData } from "../services/availabilityRules";
 
-interface AvailabilityData {
-  date: Date;
-  startTime: string;
-  endTime: string;
-}
+// O booking é o que distingue reserva de cliente externo (intocável) de
+// encaixe manual (editável pelo dono).
+const withBooking = { booking: { select: { id: true } } };
 
 export const availabilityRepository = {
   findManyByEmployee(employeeId: number) {
     return prisma.availability.findMany({
       where: { employeeId },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      include: withBooking,
     });
   },
 
   findById(id: number) {
-    return prisma.availability.findUnique({ where: { id } });
+    return prisma.availability.findUnique({
+      where: { id },
+      include: withBooking,
+    });
   },
 
   findByUniqueSlot(employeeId: number, date: Date, startTime: string) {
@@ -25,11 +28,18 @@ export const availabilityRepository = {
   },
 
   create(employeeId: number, data: AvailabilityData) {
-    return prisma.availability.create({ data: { ...data, employeeId } });
+    return prisma.availability.create({
+      data: { ...data, employeeId },
+      include: withBooking,
+    });
   },
 
   update(id: number, data: AvailabilityData) {
-    return prisma.availability.update({ where: { id }, data });
+    return prisma.availability.update({
+      where: { id },
+      data,
+      include: withBooking,
+    });
   },
 
   delete(id: number) {

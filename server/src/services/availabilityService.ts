@@ -1,12 +1,11 @@
-import { Availability } from "@prisma/client";
 import { BadRequestError, ConflictError, NotFoundError } from "../lib/errors";
 import { availabilityRepository } from "../repositories/availabilityRepository";
-
-interface AvailabilityInput {
-  date: string;
-  startTime: string;
-  endTime: string;
-}
+import {
+  AvailabilityInput,
+  AvailabilityRow,
+  buildAvailabilityData,
+  toAvailabilityDto,
+} from "./availabilityRules";
 
 function validateTimeRange(input: AvailabilityInput): void {
   // "HH:mm" com zero à esquerda compara corretamente como string
@@ -15,7 +14,10 @@ function validateTimeRange(input: AvailabilityInput): void {
   }
 }
 
-async function findOwnedAvailability(employeeId: number, id: number): Promise<Availability> {
+async function findOwnedAvailability(
+  employeeId: number,
+  id: number,
+): Promise<AvailabilityRow> {
   const availability = await availabilityRepository.findById(id);
   if (!availability || availability.employeeId !== employeeId) {
     throw new NotFoundError("Availability not found");
@@ -24,61 +26,60 @@ async function findOwnedAvailability(employeeId: number, id: number): Promise<Av
   return availability;
 }
 
+// A trava é o Booking, não o isBooked: um encaixe digitado pelo próprio
+// colaborador precisa continuar corrigível por ele.
+function assertNotBooked(availability: AvailabilityRow, action: string): void {
+  if (availability.booking) {
+    throw new ConflictError(`This time slot is booked and cannot be ${action}`);
+  }
+}
+
 export const availabilityService = {
-  listAvailabilities(employeeId: number) {
-    return availabilityRepository.findManyByEmployee(employeeId);
+  async listAvailabilities(employeeId: number) {
+    const availabilities = await availabilityRepository.findManyByEmployee(employeeId);
+    return availabilities.map(toAvailabilityDto);
   },
 
   async createAvailability(employeeId: number, input: AvailabilityInput) {
     validateTimeRange(input);
 
-    const date = new Date(input.date);
+    const data = buildAvailabilityData(input);
     const duplicate = await availabilityRepository.findByUniqueSlot(
       employeeId,
-      date,
-      input.startTime,
+      data.date,
+      data.startTime,
     );
     if (duplicate) {
       throw new ConflictError("You already have a time slot starting at this time");
     }
 
-    return availabilityRepository.create(employeeId, {
-      date,
-      startTime: input.startTime,
-      endTime: input.endTime,
-    });
+    const created = await availabilityRepository.create(employeeId, data);
+    return toAvailabilityDto(created);
   },
 
   async updateAvailability(employeeId: number, id: number, input: AvailabilityInput) {
     validateTimeRange(input);
 
     const availability = await findOwnedAvailability(employeeId, id);
-    if (availability.isBooked) {
-      throw new ConflictError("This time slot is booked and cannot be changed");
-    }
+    assertNotBooked(availability, "changed");
 
-    const date = new Date(input.date);
+    const data = buildAvailabilityData(input);
     const duplicate = await availabilityRepository.findByUniqueSlot(
       employeeId,
-      date,
-      input.startTime,
+      data.date,
+      data.startTime,
     );
     if (duplicate && duplicate.id !== id) {
       throw new ConflictError("You already have a time slot starting at this time");
     }
 
-    return availabilityRepository.update(id, {
-      date,
-      startTime: input.startTime,
-      endTime: input.endTime,
-    });
+    const updated = await availabilityRepository.update(id, data);
+    return toAvailabilityDto(updated);
   },
 
   async deleteAvailability(employeeId: number, id: number) {
     const availability = await findOwnedAvailability(employeeId, id);
-    if (availability.isBooked) {
-      throw new ConflictError("This time slot is booked and cannot be deleted");
-    }
+    assertNotBooked(availability, "deleted");
 
     await availabilityRepository.delete(id);
   },
