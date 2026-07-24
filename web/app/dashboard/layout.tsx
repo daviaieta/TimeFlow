@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -94,9 +95,9 @@ export default function DashboardLayout({
     <AuthUserProvider value={user}>
       <div className="flex flex-1 bg-zinc-50 dark:bg-background">
         <aside className="hidden w-60 shrink-0 flex-col border-r bg-card px-4 py-6 sm:flex">
-          <a href="/dashboard" className="flex items-center px-2">
+          <Link href="/dashboard" className="flex items-center px-2">
             <Logo />
-          </a>
+          </Link>
 
           <nav className="mt-8 flex flex-col gap-1">
             {navItems
@@ -104,7 +105,7 @@ export default function DashboardLayout({
               .map((item) => {
                 const active = pathname === item.href;
                 return (
-                  <a
+                  <Link
                     key={item.href}
                     href={item.href}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -118,7 +119,7 @@ export default function DashboardLayout({
                       className="size-4 shrink-0"
                     />
                     {item.label}
-                  </a>
+                  </Link>
                 );
               })}
           </nav>
@@ -135,9 +136,6 @@ export default function DashboardLayout({
           <header className="flex h-16 items-center justify-between border-b bg-card px-6">
             {user.business ? (
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-xs font-bold text-white">
-                  {businessInitials(user.business.name)}
-                </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold tracking-tight">
                     {formatBusinessName(user.business.name)}

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -25,9 +26,11 @@ import {
   PublicService,
   PublicSlot,
   dayChipLabel,
+  earliestNextSlot,
   formatPrice,
   groupSlotsByDay,
   isValidPhone,
+  nextSlotLabel,
 } from "@/lib/publicBooking";
 
 type Step = "service" | "employee" | "slot" | "details" | "success";
@@ -257,25 +260,63 @@ export function BookingWizard({ slug }: { slug: string }) {
   }
 
   const stepIndex = STEP_ORDER.indexOf(step);
+  const businessNextSlot = earliestNextSlot(catalog.professionals);
   const groups = groupSlotsByDay(slots);
   const daySlots = groups.find(([key]) => key === day)?.[1] ?? [];
 
   return (
     <div className="flex min-h-dvh flex-col items-center bg-zinc-50 px-5 py-8 dark:bg-background">
       <div className="w-full max-w-md">
-        <header className="flex items-center gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-bold text-white">
-            {businessInitials(catalog.business.name)}
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold tracking-tight">
-              {businessName}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Passo {stepIndex + 1} de 4 · {STEP_TITLES[step as Exclude<Step, "success">]}
+        {step === "service" ? (
+          <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 to-violet-600 p-6 text-white shadow-lg">
+            <div className="flex size-12 items-center justify-center rounded-2xl border border-white/30 bg-white/20 text-base font-bold backdrop-blur">
+              {businessInitials(catalog.business.name)}
+            </div>
+            <h1 className="mt-4 text-2xl font-bold tracking-tight">{businessName}</h1>
+            <p className="mt-1 text-sm text-white/80">
+              Agende online em menos de 1 minuto — sem criar conta.
             </p>
-          </div>
-        </header>
+            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/80">
+              <span>
+                <span className="block text-base font-bold text-white">
+                  {catalog.services.length}
+                </span>
+                {catalog.services.length === 1 ? "serviço" : "serviços"}
+              </span>
+              <span>
+                <span className="block text-base font-bold text-white">
+                  {catalog.professionals.length}
+                </span>
+                {catalog.professionals.length === 1 ? "profissional" : "profissionais"}
+              </span>
+              {businessNextSlot && (
+                <span>
+                  <span className="block text-base font-bold text-white">
+                    {businessNextSlot.date.slice(0, 10) === todayKey
+                      ? "Hoje"
+                      : dayChipLabel(businessNextSlot.date.slice(0, 10), todayKey)}
+                  </span>
+                  próxima vaga
+                </span>
+              )}
+            </div>
+          </header>
+        ) : (
+          <header className="flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-bold text-white">
+              {businessInitials(catalog.business.name)}
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold tracking-tight">
+                {businessName}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Passo {stepIndex + 1} de 4 ·{" "}
+                {STEP_TITLES[step as Exclude<Step, "success">]}
+              </p>
+            </div>
+          </header>
+        )}
 
         <div className="mt-4 flex gap-1.5">
           {STEP_ORDER.map((s, index) => (
@@ -328,25 +369,61 @@ export function BookingWizard({ slug }: { slug: string }) {
                   agendamento online.
                 </p>
               )}
-              {catalog.services.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => chooseService(s)}
-                  className="group flex items-center justify-between gap-3 rounded-2xl border bg-card px-5 py-4 text-left transition-colors hover:border-indigo-500/50"
-                >
-                  <div>
-                    <p className="text-sm font-semibold">{s.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {formatMinutes(s.duration)} · {formatPrice(s.price)}
-                    </p>
+              {catalog.services.map((s) => {
+                const next = earliestNextSlot(s.employees);
+
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => chooseService(s)}
+                    className="group flex items-center justify-between gap-3 rounded-2xl border bg-card px-5 py-4 text-left transition-colors hover:border-indigo-500/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{s.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatMinutes(s.duration)} · {formatPrice(s.price)}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        com {s.employees.map((e) => e.name).join(", ")}
+                      </p>
+                      {next && (
+                        <span className="mt-2 inline-flex rounded-full bg-indigo-500/12 px-2.5 py-0.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400">
+                          Próximo: {nextSlotLabel(next, todayKey)}
+                        </span>
+                      )}
+                    </div>
+                    <HugeiconsIcon
+                      icon={ArrowRight02Icon}
+                      className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                    />
+                  </button>
+                );
+              })}
+
+              {catalog.professionals.length > 0 && (
+                <section className="mt-4">
+                  <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Profissionais
+                  </h2>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    {catalog.professionals.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex flex-col items-center gap-1.5 rounded-2xl border bg-card px-3 py-4 text-center"
+                      >
+                        <div className="flex size-11 items-center justify-center rounded-full bg-indigo-500/15 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                          {p.name.charAt(0).toUpperCase()}
+                        </div>
+                        <p className="mt-0.5 truncate text-sm font-semibold">{p.name}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {p.nextSlot ? nextSlotLabel(p.nextSlot, todayKey) : "sem vagas"}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                  <HugeiconsIcon
-                    icon={ArrowRight02Icon}
-                    className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                  />
-                </button>
-              ))}
+                </section>
+              )}
             </div>
           )}
 
@@ -495,6 +572,15 @@ export function BookingWizard({ slug }: { slug: string }) {
             </form>
           )}
         </main>
+
+        <footer className="mt-10 text-center">
+          <Link
+            href="/"
+            className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ⚡ Agendamentos por Time Flow
+          </Link>
+        </footer>
       </div>
     </div>
   );

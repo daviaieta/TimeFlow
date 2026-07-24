@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
+  Calendar03Icon,
+  CheckmarkCircle02Icon,
   Delete02Icon,
   PencilEdit02Icon,
 } from "@hugeicons/core-free-icons";
@@ -33,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Availability } from "@/lib/types";
 import { formatBusinessName } from "@/lib/businessName";
+import { estimateGeneratedSlots } from "@/lib/generatePlan";
 import {
   formatDuration,
   formatMinutes,
@@ -43,6 +46,9 @@ import {
   toMinutes,
 } from "@/lib/schedule";
 import { useAuthUser } from "../auth-context";
+
+// Índices batem com Date.getUTCDay() / o weekdays da API (0=dom … 6=sáb)
+const WEEKDAY_LABELS = ["D", "S", "T", "Q", "Q", "S", "S"];
 
 function formatDate(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR", {
@@ -68,6 +74,22 @@ export default function SchedulePage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [genOpen, setGenOpen] = useState(false);
+  const [genStart, setGenStart] = useState("");
+  const [genEnd, setGenEnd] = useState("");
+  const [genDays, setGenDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [genWorkStart, setGenWorkStart] = useState("09:00");
+  const [genWorkEnd, setGenWorkEnd] = useState("18:00");
+  const [genBreak, setGenBreak] = useState(true);
+  const [genBreakStart, setGenBreakStart] = useState("12:00");
+  const [genBreakEnd, setGenBreakEnd] = useState("13:00");
+  const [genSlotMinutes, setGenSlotMinutes] = useState(30);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [genSubmitting, setGenSubmitting] = useState(false);
+  const [genResult, setGenResult] = useState<{ created: number; skipped: number } | null>(
+    null,
+  );
 
   const [deleting, setDeleting] = useState<Availability | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -150,6 +172,56 @@ export default function SchedulePage() {
     }
   }
 
+  function openGenerate() {
+    const today = new Date();
+    const inThirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    setGenStart(localDayKey(today));
+    setGenEnd(localDayKey(inThirtyDays));
+    setGenError(null);
+    setGenResult(null);
+    setGenOpen(true);
+  }
+
+  function toggleGenDay(day: number) {
+    setGenDays((current) =>
+      current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort(),
+    );
+  }
+
+  async function handleGenerate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGenError(null);
+    setGenSubmitting(true);
+
+    try {
+      const { data } = await fetchAdapter<{ created: number; skipped: number }>({
+        method: "POST",
+        path: "/availabilities/generate",
+        body: {
+          startDate: genStart,
+          endDate: genEnd,
+          weekdays: genDays,
+          workStart: genWorkStart,
+          workEnd: genWorkEnd,
+          slotMinutes: genSlotMinutes,
+          ...(genBreak ? { breakStart: genBreakStart, breakEnd: genBreakEnd } : {}),
+        },
+      });
+      setGenResult(data);
+    } catch (err) {
+      setGenError(err instanceof ApiError ? err.message : "Erro inesperado.");
+    } finally {
+      setGenSubmitting(false);
+    }
+  }
+
+  async function closeGenerate() {
+    setGenOpen(false);
+    if (genResult && genResult.created > 0) {
+      await loadAvailabilities();
+    }
+  }
+
   async function handleDelete() {
     if (!deleting) return;
     setDeleteError(null);
@@ -189,10 +261,16 @@ export default function SchedulePage() {
             Gerencie seus horários disponíveis para agendamento.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
-          Novo horário
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" onClick={openGenerate}>
+            <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
+            Gerar horários
+          </Button>
+          <Button onClick={openCreate}>
+            <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+            Novo horário
+          </Button>
+        </div>
       </div>
 
       {!loading && !listError && past.length > 0 && (
@@ -416,6 +494,216 @@ export default function SchedulePage() {
               </DialogFooter>
             </FieldGroup>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={genOpen}
+        onOpenChange={(open) => {
+          if (!open) void closeGenerate();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gerar horários</DialogTitle>
+            <DialogDescription>
+              Informe sua jornada e o sistema cria todos os horários do período
+              de uma vez.
+            </DialogDescription>
+          </DialogHeader>
+
+          {genResult ? (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
+                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-6" />
+              </div>
+              <p className="text-sm">
+                <span className="font-semibold">{genResult.created}</span> horários
+                criados
+                {genResult.skipped > 0 && (
+                  <>
+                    {" · "}
+                    <span className="text-muted-foreground">
+                      {genResult.skipped} pulados
+                    </span>
+                  </>
+                )}
+              </p>
+              {genResult.skipped > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Pulados são horários que já existiam ou que conflitam com
+                  outros na sua agenda.
+                </p>
+              )}
+              <Button className="mt-2" onClick={() => void closeGenerate()}>
+                Fechar
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleGenerate}>
+              <FieldGroup>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="gen-start">De</FieldLabel>
+                    <Input
+                      id="gen-start"
+                      type="date"
+                      value={genStart}
+                      onChange={(event) => setGenStart(event.target.value)}
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="gen-end">Até</FieldLabel>
+                    <Input
+                      id="gen-end"
+                      type="date"
+                      value={genEnd}
+                      onChange={(event) => setGenEnd(event.target.value)}
+                      required
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel>Dias da semana</FieldLabel>
+                  <div className="flex gap-1.5">
+                    {WEEKDAY_LABELS.map((label, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        aria-pressed={genDays.includes(index)}
+                        onClick={() => toggleGenDay(index)}
+                        className={`size-9 rounded-lg border text-xs font-semibold transition-colors ${
+                          genDays.includes(index)
+                            ? "border-indigo-500 bg-indigo-500 text-white"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="gen-work-start">Entrada</FieldLabel>
+                    <Input
+                      id="gen-work-start"
+                      type="time"
+                      value={genWorkStart}
+                      onChange={(event) => setGenWorkStart(event.target.value)}
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="gen-work-end">Saída</FieldLabel>
+                    <Input
+                      id="gen-work-end"
+                      type="time"
+                      value={genWorkEnd}
+                      onChange={(event) => setGenWorkEnd(event.target.value)}
+                      required
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={genBreak}
+                      onChange={(event) => setGenBreak(event.target.checked)}
+                      className="size-4 accent-indigo-500"
+                    />
+                    Pausa para almoço
+                  </label>
+                </Field>
+
+                {genBreak && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field>
+                      <FieldLabel htmlFor="gen-break-start">Início da pausa</FieldLabel>
+                      <Input
+                        id="gen-break-start"
+                        type="time"
+                        value={genBreakStart}
+                        onChange={(event) => setGenBreakStart(event.target.value)}
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="gen-break-end">Fim da pausa</FieldLabel>
+                      <Input
+                        id="gen-break-end"
+                        type="time"
+                        value={genBreakEnd}
+                        onChange={(event) => setGenBreakEnd(event.target.value)}
+                        required
+                      />
+                    </Field>
+                  </div>
+                )}
+
+                <Field>
+                  <FieldLabel htmlFor="gen-slot">Duração de cada horário</FieldLabel>
+                  <select
+                    id="gen-slot"
+                    value={genSlotMinutes}
+                    onChange={(event) => setGenSlotMinutes(Number(event.target.value))}
+                    className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                  >
+                    {[15, 30, 45, 60, 90].map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {formatMinutes(minutes)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <p className="rounded-lg bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
+                  ≈{" "}
+                  <span className="font-semibold text-foreground">
+                    {estimateGeneratedSlots({
+                      startDate: genStart,
+                      endDate: genEnd,
+                      weekdays: genDays,
+                      workStart: genWorkStart,
+                      workEnd: genWorkEnd,
+                      slotMinutes: genSlotMinutes,
+                      ...(genBreak
+                        ? { breakStart: genBreakStart, breakEnd: genBreakEnd }
+                        : {}),
+                    })}
+                  </span>{" "}
+                  horários serão criados
+                </p>
+
+                {genError && <FieldError>{genError}</FieldError>}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void closeGenerate()}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={genSubmitting || genDays.length === 0}>
+                    {genSubmitting ? (
+                      <>
+                        <Spinner data-icon="inline-start" />
+                        Gerando…
+                      </>
+                    ) : (
+                      "Gerar"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </FieldGroup>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
