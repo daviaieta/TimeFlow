@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { fetchAdapter } from "@/adapters/fetchAdapter";
 import { AuthUser, Role, clearToken, getToken } from "@/lib/auth";
+import { businessInitials, formatBusinessName } from "@/lib/businessName";
 import { AuthUserProvider } from "./auth-context";
 
 const navItems: {
@@ -132,9 +133,23 @@ export default function DashboardLayout({
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-            <p className="truncate text-sm font-medium">
-              {user.business?.name ?? "Plataforma"}
-            </p>
+            {user.business ? (
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-xs font-bold text-white">
+                  {businessInitials(user.business.name)}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold tracking-tight">
+                    {formatBusinessName(user.business.name)}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {roleLabels[user.role]}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="truncate text-sm font-medium">Plataforma</p>
+            )}
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <HugeiconsIcon icon={Logout03Icon} data-icon="inline-start" />
               Sair
