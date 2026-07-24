@@ -38,7 +38,9 @@ export const fetchAdapter = async <T = unknown>({
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
-      "Content-Type": "application/json",
+      // Só declara JSON quando há body: num DELETE sem body o Fastify recusa
+      // a requisição com "Body cannot be empty when content-type is set".
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
