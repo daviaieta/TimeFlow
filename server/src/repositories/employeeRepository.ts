@@ -53,4 +53,10 @@ export const employeeRepository = {
       update: {},
     });
   },
+
+  unlinkService(employeeId: number, serviceId: number) {
+    return prisma.employeeService.deleteMany({
+      where: { employeeId, serviceId },
+    });
+  },
 };

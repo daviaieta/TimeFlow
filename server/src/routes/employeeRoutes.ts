@@ -5,9 +5,11 @@ import {
   deleteEmployee,
   linkService,
   listEmployees,
+  unlinkService,
   CreateEmployeeBody,
   EmployeeParams,
   LinkServiceBody,
+  UnlinkServiceParams,
 } from "../controllers/employeeController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
@@ -46,6 +48,18 @@ const linkServiceSchema = {
   },
 };
 
+const unlinkServiceParamsSchema = {
+  params: {
+    type: "object",
+    required: ["id", "serviceId"],
+    additionalProperties: false,
+    properties: {
+      id: { type: "integer" },
+      serviceId: { type: "integer" },
+    },
+  },
+};
+
 export async function employeeRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: CreateEmployeeBody }>(
     "/employees",
@@ -78,5 +92,14 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [authenticate, authorize(Role.ADMIN)],
     },
     linkService,
+  );
+
+  app.delete<{ Params: UnlinkServiceParams }>(
+    "/employees/:id/services/:serviceId",
+    {
+      schema: unlinkServiceParamsSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN)],
+    },
+    unlinkService,
   );
 }

@@ -95,4 +95,9 @@ export const employeeService = {
 
     await employeeRepository.linkService(employeeId, serviceId);
   },
+
+  async unlinkService(businessId: number, employeeId: number, serviceId: number) {
+    await findOwnedEmployee(businessId, employeeId);
+    await employeeRepository.unlinkService(employeeId, serviceId);
+  },
 };

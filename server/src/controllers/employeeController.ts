@@ -15,6 +15,11 @@ export interface LinkServiceBody {
   serviceId: number;
 }
 
+export interface UnlinkServiceParams {
+  id: number;
+  serviceId: number;
+}
+
 export async function listEmployees(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -50,6 +55,18 @@ export async function linkService(
     requireBusinessId(request),
     request.params.id,
     request.body.serviceId,
+  );
+  reply.status(204).send();
+}
+
+export async function unlinkService(
+  request: FastifyRequest<{ Params: UnlinkServiceParams }>,
+  reply: FastifyReply,
+): Promise<void> {
+  await employeeService.unlinkService(
+    requireBusinessId(request),
+    request.params.id,
+    request.params.serviceId,
   );
   reply.status(204).send();
 }
