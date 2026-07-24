@@ -8,6 +8,7 @@ import { serviceRepository } from "../repositories/serviceRepository";
 import { normalizeClientName } from "./availabilityRules";
 import {
   buildBookingSummary,
+  firstUpcomingPerEmployee,
   isSlotUpcoming,
   toPublicBusinessDto,
   toPublicSlotDto,
@@ -28,6 +29,13 @@ export const publicBookingService = {
       throw new NotFoundError("Business not found");
     }
 
+    const now = new Date();
+    const from = new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const freeSlots = await availabilityRepository.findManyFreeByBusiness(
+      business.id,
+      from,
+    );
+
     return toPublicBusinessDto(
       business,
       business.services.map((service) => ({
@@ -37,6 +45,7 @@ export const publicBookingService = {
         price: service.price,
         employees: service.employees.map((link) => link.employee),
       })),
+      firstUpcomingPerEmployee(freeSlots, now),
     );
   },
 

@@ -12,14 +12,26 @@ export interface CatalogService {
   employees: { id: number; name: string }[];
 }
 
+export interface NextSlot {
+  date: string;
+  startTime: string;
+}
+
+export interface PublicEmployeeDto {
+  id: number;
+  name: string;
+  nextSlot: NextSlot | null;
+}
+
 export interface PublicBusinessDto {
   business: { name: string; slug: string };
+  professionals: PublicEmployeeDto[];
   services: {
     id: number;
     name: string;
     duration: number;
     price: string;
-    employees: { id: number; name: string }[];
+    employees: PublicEmployeeDto[];
   }[];
 }
 
@@ -66,23 +78,63 @@ export function isSlotUpcoming(
   return slot.startTime > `${hours}:${minutes}`;
 }
 
+// Slots chegam ordenados por data/hora — o primeiro futuro de cada
+// profissional vence. Quem não tem vaga à frente fica fora do mapa.
+export function firstUpcomingPerEmployee(
+  slots: { employeeId: number; date: Date; startTime: string }[],
+  now: Date,
+): Map<number, NextSlot> {
+  const map = new Map<number, NextSlot>();
+
+  for (const slot of slots) {
+    if (map.has(slot.employeeId)) continue;
+    if (!isSlotUpcoming(slot, now)) continue;
+
+    map.set(slot.employeeId, {
+      date: slot.date.toISOString(),
+      startTime: slot.startTime,
+    });
+  }
+
+  return map;
+}
+
 // Serviço sem profissional vinculado sai do catálogo: o cliente não pode
 // escolher um caminho sem horário possível.
 export function toPublicBusinessDto(
   business: { name: string; slug: string },
   services: CatalogService[],
+  nextSlots: Map<number, NextSlot>,
 ): PublicBusinessDto {
+  const visible = services.filter((service) => service.employees.length > 0);
+
+  const withNextSlot = (employee: { id: number; name: string }): PublicEmployeeDto => ({
+    id: employee.id,
+    name: employee.name,
+    nextSlot: nextSlots.get(employee.id) ?? null,
+  });
+
+  // Profissionais do topo: união dos serviços visíveis, na ordem de primeira
+  // aparição, sem repetir quem atende mais de um serviço.
+  const professionals = new Map<number, PublicEmployeeDto>();
+  for (const service of visible) {
+    for (const employee of service.employees) {
+      if (!professionals.has(employee.id)) {
+        professionals.set(employee.id, withNextSlot(employee));
+      }
+    }
+  }
+
   return {
     business: { name: business.name, slug: business.slug },
-    services: services
-      .filter((service) => service.employees.length > 0)
-      .map((service) => ({
-        id: service.id,
-        name: service.name,
-        duration: service.duration,
-        price: service.price.toString(),
-        employees: service.employees,
-      })),
+    professionals: [...professionals.values()],
+    services: visible.map((service) => ({
+      id: service.id,
+      name: service.name,
+      duration: service.duration,
+      price: service.price.toString(),
+      employees: service.employees.map(withNextSlot),
+    })),
   };
 }
 

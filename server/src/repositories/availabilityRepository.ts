@@ -49,6 +49,14 @@ export const availabilityRepository = {
     });
   },
 
+  findManyFreeByBusiness(businessId: number, from: Date) {
+    return prisma.availability.findMany({
+      where: { isBooked: false, date: { gte: from }, employee: { businessId } },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      select: { employeeId: true, date: true, startTime: true },
+    });
+  },
+
   findByIdForBooking(id: number) {
     return prisma.availability.findUnique({
       where: { id },
