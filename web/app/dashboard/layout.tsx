@@ -12,7 +12,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { apiGet } from "@/lib/api";
+import { fetchAdapter } from "@/adapters/fetchAdapter";
 import { AuthUser, clearToken, getToken } from "@/lib/auth";
 import { AuthUserProvider } from "./auth-context";
 
@@ -42,8 +42,8 @@ export default function DashboardLayout({
       return;
     }
 
-    apiGet<{ user: AuthUser }>("/auth/me", token)
-      .then(({ user }) => setUser(user))
+    fetchAdapter<{ user: AuthUser }>({ method: "GET", path: "/auth/me" })
+      .then(({ data }) => setUser(data.user))
       .catch(() => {
         clearToken();
         router.replace("/login");

@@ -21,7 +21,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
-import { apiPost } from "@/lib/api";
+import { fetchAdapter } from "@/adapters/fetchAdapter";
 import { saveToken } from "@/lib/auth";
 
 function GoogleLogo(props: React.ComponentProps<"svg">) {
@@ -62,11 +62,12 @@ export function LoginForm() {
     setSubmitting(true);
 
     try {
-      const { token } = await apiPost<{ token: string }>("/auth/login", {
-        email,
-        password,
+      const { data } = await fetchAdapter<{ token: string }>({
+        method: "POST",
+        path: "/auth/login",
+        body: { email, password },
       });
-      saveToken(token);
+      saveToken(data.token);
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado.");

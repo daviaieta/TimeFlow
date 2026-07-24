@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Alert01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { apiPost } from "@/lib/api";
+import { fetchAdapter } from "@/adapters/fetchAdapter";
 import { saveToken } from "@/lib/auth";
 
 const inputClassName =
@@ -68,11 +68,12 @@ export function AcceptInviteForm() {
 
     setStatus("submitting");
     try {
-      const { token: authToken } = await apiPost<{ token: string }>(
-        "/auth/accept-invite",
-        { token, password },
-      );
-      saveToken(authToken);
+      const { data } = await fetchAdapter<{ token: string }>({
+        method: "POST",
+        path: "/auth/accept-invite",
+        body: { token, password },
+      });
+      saveToken(data.token);
       setStatus("success");
       setTimeout(() => router.push("/dashboard"), 1500);
     } catch (err) {
