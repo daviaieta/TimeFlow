@@ -24,4 +24,6 @@ export interface Availability {
   startTime: string;
   endTime: string;
   isBooked: boolean;
+  clientName: string | null;
+  locked: boolean; // reserva de cliente externo — não pode ser editada
 }
