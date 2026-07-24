@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { LogoMark } from "@/components/logo";
 import { getToken } from "@/lib/auth";
 
@@ -38,7 +39,7 @@ export function LandingHeader() {
             : "max-w-6xl px-6 py-4"
         }`}
       >
-        <a href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <span
             className={`flex size-8 items-center justify-center rounded-lg bg-white p-1 ring-1 ${
               scrolled ? "ring-transparent" : "ring-white/30"
@@ -49,7 +50,7 @@ export function LandingHeader() {
           <span className="text-lg font-semibold tracking-tight">
             Time Flow
           </span>
-        </a>
+        </Link>
 
         <nav
           className={`hidden items-center gap-8 text-sm font-medium md:flex ${
@@ -70,7 +71,7 @@ export function LandingHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <a
+          <Link
             href={loggedIn ? "/dashboard" : "/login"}
             className={`rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-colors ${
               scrolled
@@ -79,7 +80,7 @@ export function LandingHeader() {
             }`}
           >
             {loggedIn ? "Ir para o dashboard" : "Entrar"}
-          </a>
+          </Link>
         </div>
       </div>
     </header>

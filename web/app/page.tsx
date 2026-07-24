@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowRight02Icon,
@@ -325,12 +326,12 @@ export default function Home() {
               Falar com a gente
               <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
             </a>
-            <a
+            <Link
               href="/login"
               className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-medium transition-colors hover:bg-muted"
             >
               Já tenho conta
-            </a>
+            </Link>
           </div>
         </div>
       </section>

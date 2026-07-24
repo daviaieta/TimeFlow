@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { AcceptInviteForm } from "./accept-invite-form";
 
@@ -10,9 +11,9 @@ export const metadata: Metadata = {
 export default function AcceptInvitePage() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6 py-16 dark:bg-background">
-      <a href="/" className="mb-8 flex items-center">
+      <Link href="/" className="mb-8 flex items-center">
         <Logo />
-      </a>
+      </Link>
 
       <div className="w-full max-w-sm rounded-2xl border bg-card p-8 shadow-sm">
         <h1 className="text-lg font-semibold tracking-tight">
