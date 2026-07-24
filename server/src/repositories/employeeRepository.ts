@@ -54,6 +54,12 @@ export const employeeRepository = {
     });
   },
 
+  hasServiceLink(employeeId: number, serviceId: number) {
+    return prisma.employeeService.findUnique({
+      where: { employeeId_serviceId: { employeeId, serviceId } },
+    });
+  },
+
   unlinkService(employeeId: number, serviceId: number) {
     return prisma.employeeService.deleteMany({
       where: { employeeId, serviceId },

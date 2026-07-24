@@ -21,6 +21,25 @@ export const businessRepository = {
     return prisma.business.findUnique({ where: { id } });
   },
 
+  // Catálogo público: serviços com os profissionais que os oferecem.
+  // password not-null = convite aceito; pendente não tem agenda.
+  findBySlugWithCatalog(slug: string) {
+    return prisma.business.findUnique({
+      where: { slug },
+      include: {
+        services: {
+          orderBy: { name: "asc" },
+          include: {
+            employees: {
+              where: { employee: { password: { not: null } } },
+              include: { employee: { select: { id: true, name: true } } },
+            },
+          },
+        },
+      },
+    });
+  },
+
   createWithAdmin({ name, slug, admin }: CreateWithAdminInput) {
     return prisma.business.create({
       data: {

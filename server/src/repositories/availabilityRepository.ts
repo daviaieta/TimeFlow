@@ -21,6 +21,22 @@ export const availabilityRepository = {
     });
   },
 
+  findManyFreeByEmployee(employeeId: number) {
+    return prisma.availability.findMany({
+      where: { employeeId, isBooked: false },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    });
+  },
+
+  findByIdForBooking(id: number) {
+    return prisma.availability.findUnique({
+      where: { id },
+      include: {
+        employee: { select: { id: true, name: true, businessId: true } },
+      },
+    });
+  },
+
   findByUniqueSlot(employeeId: number, date: Date, startTime: string) {
     return prisma.availability.findUnique({
       where: { employeeId_date_startTime: { employeeId, date, startTime } },

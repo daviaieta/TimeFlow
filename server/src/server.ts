@@ -9,6 +9,7 @@ import { availabilityRoutes } from "./routes/availabilityRoutes";
 import { authRoutes } from "./routes/authRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
 import { employeeRoutes } from "./routes/employeeRoutes";
+import { publicRoutes } from "./routes/publicRoutes";
 import { serviceRoutes } from "./routes/serviceRoutes";
 import "./interfaces/auth";
 
@@ -39,6 +40,7 @@ app.register(businessRoutes);
 app.register(serviceRoutes);
 app.register(employeeRoutes);
 app.register(availabilityRoutes);
+app.register(publicRoutes);
 
 app.listen({
   port: env.port,
