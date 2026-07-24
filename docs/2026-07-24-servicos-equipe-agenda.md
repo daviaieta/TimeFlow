@@ -418,7 +418,7 @@ Fora de escopo nesta etapa, por decisão explícita do design spec:
   colaborador e a visão de reservas ainda não existem.
 - **Client view pública (Fase 4)** — `GET /app/:businessSlug/services`,
   `GET /app/:businessSlug/services/:serviceId/availabilities` e
-  `POST /app/:businessSlug/bookings`, sem autenticação. É o fluxo que un cliente final
+  `POST /app/:businessSlug/bookings`, sem autenticação. É o fluxo que um cliente final
   usaria para reservar um horário; depende de Bookings estar pronto.
 - **Realtime, e-mail transacional de confirmação e upload (Fase 5)** — WebSocket por
   `businessId` para refletir mudanças de disponibilidade em tempo real na client view,
