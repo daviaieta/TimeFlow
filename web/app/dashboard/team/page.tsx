@@ -57,6 +57,11 @@ export default function TeamPage() {
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeSubmitting, setRemoveSubmitting] = useState(false);
 
+  const [linkError, setLinkError] = useState<{
+    employeeId: number;
+    message: string;
+  } | null>(null);
+
   const loadData = useCallback(() => {
     return Promise.all([
       fetchAdapter<{ employees: Employee[] }>({
@@ -113,6 +118,8 @@ export default function TeamPage() {
   }
 
   async function handleLinkService(employee: Employee, serviceId: string) {
+    setLinkError(null);
+
     try {
       await fetchAdapter({
         method: "POST",
@@ -121,7 +128,10 @@ export default function TeamPage() {
       });
       await loadData();
     } catch (err) {
-      setListError(err instanceof ApiError ? err.message : "Erro inesperado.");
+      setLinkError({
+        employeeId: employee.id,
+        message: err instanceof ApiError ? err.message : "Erro inesperado.",
+      });
     }
   }
 
@@ -238,6 +248,12 @@ export default function TeamPage() {
                     </div>
                   )}
                 </div>
+
+                {linkError?.employeeId === employee.id && (
+                  <p className="mt-2 text-sm text-destructive">
+                    {linkError.message}
+                  </p>
+                )}
 
                 {employee.services.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
