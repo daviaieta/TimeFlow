@@ -32,18 +32,17 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Availability } from "@/lib/types";
+import { formatBusinessName } from "@/lib/businessName";
+import {
+  formatDuration,
+  formatMinutes,
+  groupByDate,
+  localDayKey,
+  partitionByDay,
+  summarizeDay,
+  toMinutes,
+} from "@/lib/schedule";
 import { useAuthUser } from "../auth-context";
-
-function groupByDate(availabilities: Availability[]): Map<string, Availability[]> {
-  const groups = new Map<string, Availability[]>();
-  for (const availability of availabilities) {
-    const key = availability.date.slice(0, 10);
-    const list = groups.get(key) ?? [];
-    list.push(availability);
-    groups.set(key, list);
-  }
-  return groups;
-}
 
 function formatDate(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR", {
@@ -65,6 +64,8 @@ export default function SchedulePage() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -108,6 +109,7 @@ export default function SchedulePage() {
     setDate("");
     setStartTime("");
     setEndTime("");
+    setClientName("");
     setFormError(null);
     setDialogOpen(true);
   }
@@ -117,6 +119,7 @@ export default function SchedulePage() {
     setDate(availability.date.slice(0, 10));
     setStartTime(availability.startTime);
     setEndTime(availability.endTime);
+    setClientName(availability.clientName ?? "");
     setFormError(null);
     setDialogOpen(true);
   }
@@ -126,7 +129,7 @@ export default function SchedulePage() {
     setFormError(null);
     setSubmitting(true);
 
-    const body = { date, startTime, endTime };
+    const body = { date, startTime, endTime, clientName: clientName.trim() || null };
 
     try {
       if (editing) {
@@ -166,13 +169,22 @@ export default function SchedulePage() {
     }
   }
 
-  const grouped = groupByDate(availabilities);
+  const todayKey = localDayKey(new Date());
+  const { upcoming, past } = partitionByDay(availabilities, todayKey);
+  // Passados do mais recente para o mais antigo: quem abre o histórico quer o
+  // dia que acabou de passar, não o de meses atrás.
+  const visible = tab === "past" ? [...past].reverse() : upcoming;
 
   return (
     <div className="mx-auto w-full max-w-5xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Agenda</h1>
+          {user.business && (
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              {formatBusinessName(user.business.name)}
+            </p>
+          )}
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight">Agenda</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Gerencie seus horários disponíveis para agendamento.
           </p>
@@ -183,7 +195,34 @@ export default function SchedulePage() {
         </Button>
       </div>
 
-      <div className="mt-8 flex flex-col gap-6">
+      {!loading && !listError && past.length > 0 && (
+        <div className="mt-6 inline-flex rounded-lg border bg-card p-0.5 text-sm">
+          <button
+            type="button"
+            onClick={() => setTab("upcoming")}
+            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+              tab === "upcoming"
+                ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Próximos
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("past")}
+            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+              tab === "past"
+                ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Passados
+          </button>
+        </div>
+      )}
+
+      <div className="mt-6 flex flex-col gap-5">
         {loading ? (
           <div className="flex items-center justify-center rounded-2xl border bg-card p-12">
             <Spinner />
@@ -192,57 +231,111 @@ export default function SchedulePage() {
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-destructive">
             {listError}
           </p>
-        ) : availabilities.length === 0 ? (
+        ) : visible.length === 0 ? (
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
-            Nenhum horário cadastrado ainda. Crie seus horários livres para que
-            clientes possam reservar.
+            {tab === "past"
+              ? "Nenhum horário passado."
+              : "Nenhum horário à frente. Crie seus horários livres para que clientes possam reservar."}
           </p>
         ) : (
-          [...grouped.entries()].map(([day, slots]) => (
-            <section key={day}>
-              <h2 className="text-sm font-medium capitalize text-muted-foreground">
-                {formatDate(day)}
-              </h2>
-              <div className="mt-2 flex flex-col gap-2">
-                {slots.map((slot) => (
-                  <div
-                    key={slot.id}
-                    className="flex items-center justify-between rounded-xl border bg-card px-4 py-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <p className="text-sm font-medium tabular-nums">
-                        {slot.startTime} – {slot.endTime}
-                      </p>
-                      {slot.isBooked && <Badge>Reservado</Badge>}
-                    </div>
-                    {!slot.isBooked && (
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Editar horário"
-                          onClick={() => openEdit(slot)}
-                        >
-                          <HugeiconsIcon icon={PencilEdit02Icon} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Excluir horário"
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeleting(slot);
-                          }}
-                        >
-                          <HugeiconsIcon icon={Delete02Icon} />
-                        </Button>
-                      </div>
+          groupByDate(visible).map(([day, slots]) => {
+            const resumo = summarizeDay(slots);
+            const isToday = day === todayKey;
+
+            return (
+              <section key={day} className="overflow-hidden rounded-2xl border bg-card">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3.5">
+                  <h2 className="text-sm font-semibold capitalize">
+                    {isToday && (
+                      <span className="text-indigo-600 dark:text-indigo-400">HOJE · </span>
                     )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))
+                    {formatDate(day)}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">{resumo.label}</span>
+                </div>
+
+                <div className="px-5 py-4">
+                  {slots.map((slot, index) => {
+                    const previous = slots[index - 1];
+                    const gap = previous
+                      ? toMinutes(slot.startTime) - toMinutes(previous.endTime)
+                      : 0;
+
+                    return (
+                      <div key={slot.id}>
+                        {gap > 0 && (
+                          <div className="grid grid-cols-[56px_1fr] gap-3">
+                            <div className="pt-1 text-right text-[11px] text-muted-foreground/40">
+                              ···
+                            </div>
+                            <div className="border-l-2 border-dotted py-2 pl-4 text-xs text-muted-foreground/60">
+                              {formatMinutes(gap)} sem horários cadastrados
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-[56px_1fr] gap-3">
+                          <div className="pt-2.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                            {slot.startTime}
+                          </div>
+                          <div className="relative border-l-2 pb-3 pl-4">
+                            <span className="absolute -left-[5px] top-3 size-2 rounded-full bg-border" />
+                            <div
+                              className={`flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 ${
+                                slot.isBooked
+                                  ? "border border-l-[3px] border-indigo-500/35 border-l-indigo-500 bg-indigo-500/10"
+                                  : "border border-dashed"
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p
+                                  className={`truncate text-sm font-semibold ${
+                                    slot.isBooked ? "" : "text-muted-foreground/60"
+                                  }`}
+                                >
+                                  {slot.clientName ?? "Livre"}
+                                </p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {slot.startTime} – {slot.endTime} ·{" "}
+                                  {formatDuration(slot.startTime, slot.endTime)}
+                                </p>
+                              </div>
+
+                              {slot.locked ? (
+                                <Badge>Reservado</Badge>
+                              ) : (
+                                <div className="flex shrink-0 gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="Editar horário"
+                                    onClick={() => openEdit(slot)}
+                                  >
+                                    <HugeiconsIcon icon={PencilEdit02Icon} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="Excluir horário"
+                                    onClick={() => {
+                                      setDeleteError(null);
+                                      setDeleting(slot);
+                                    }}
+                                  >
+                                    <HugeiconsIcon icon={Delete02Icon} />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })
         )}
       </div>
 
@@ -288,6 +381,19 @@ export default function SchedulePage() {
                   />
                 </Field>
               </div>
+              <Field>
+                <FieldLabel htmlFor="slot-client">Cliente (opcional)</FieldLabel>
+                <Input
+                  id="slot-client"
+                  value={clientName}
+                  onChange={(event) => setClientName(event.target.value)}
+                  placeholder="Nome de quem vai ocupar o horário"
+                  maxLength={80}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Deixe vazio para manter o horário livre para agendamento.
+                </p>
+              </Field>
               {formError && <FieldError>{formError}</FieldError>}
               <DialogFooter>
                 <Button
