@@ -1,11 +1,26 @@
 import { BadRequestError, ConflictError, NotFoundError } from "../lib/errors";
 import { availabilityRepository } from "../repositories/availabilityRepository";
+import { planAvailabilities } from "./availabilityGenerator";
 import {
   AvailabilityInput,
   AvailabilityRow,
   buildAvailabilityData,
   toAvailabilityDto,
 } from "./availabilityRules";
+
+export interface GenerateInput {
+  startDate: string;
+  endDate: string;
+  weekdays: number[];
+  workStart: string;
+  workEnd: string;
+  breakStart?: string;
+  breakEnd?: string;
+  slotMinutes: number;
+}
+
+const MAX_RANGE_DAYS = 62;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function validateTimeRange(input: AvailabilityInput): void {
   // "HH:mm" com zero à esquerda compara corretamente como string
@@ -75,6 +90,67 @@ export const availabilityService = {
 
     const updated = await availabilityRepository.update(id, data);
     return toAvailabilityDto(updated);
+  },
+
+  async generateAvailabilities(employeeId: number, input: GenerateInput) {
+    if (input.endDate < input.startDate) {
+      throw new BadRequestError("endDate must be on or after startDate");
+    }
+
+    const from = new Date(`${input.startDate}T00:00:00.000Z`);
+    const to = new Date(`${input.endDate}T00:00:00.000Z`);
+    if ((to.getTime() - from.getTime()) / DAY_MS > MAX_RANGE_DAYS) {
+      throw new BadRequestError(`Period cannot exceed ${MAX_RANGE_DAYS} days`);
+    }
+
+    if (input.workEnd <= input.workStart) {
+      throw new BadRequestError("workEnd must be after workStart");
+    }
+
+    const hasBreakStart = input.breakStart !== undefined;
+    const hasBreakEnd = input.breakEnd !== undefined;
+    if (hasBreakStart !== hasBreakEnd) {
+      throw new BadRequestError("breakStart and breakEnd must be provided together");
+    }
+    if (
+      input.breakStart !== undefined &&
+      input.breakEnd !== undefined &&
+      !(
+        input.workStart < input.breakStart &&
+        input.breakStart < input.breakEnd &&
+        input.breakEnd <= input.workEnd
+      )
+    ) {
+      throw new BadRequestError("Break must fit inside working hours");
+    }
+
+    const existing = await availabilityRepository.findManyByEmployeeInRange(
+      employeeId,
+      from,
+      to,
+    );
+
+    const { kept, skippedOverlap } = planAvailabilities({
+      startDate: input.startDate,
+      endDate: input.endDate,
+      weekdays: input.weekdays,
+      window: {
+        workStart: input.workStart,
+        workEnd: input.workEnd,
+        breakStart: input.breakStart,
+        breakEnd: input.breakEnd,
+      },
+      slotMinutes: input.slotMinutes,
+      existing,
+      now: new Date(),
+    });
+
+    const result = await availabilityRepository.createMany(employeeId, kept);
+
+    return {
+      created: result.count,
+      skipped: skippedOverlap + (kept.length - result.count),
+    };
   },
 
   async deleteAvailability(employeeId: number, id: number) {

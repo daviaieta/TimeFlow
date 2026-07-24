@@ -12,6 +12,17 @@ export interface AvailabilityParams {
   id: number;
 }
 
+export interface GenerateAvailabilitiesBody {
+  startDate: string;
+  endDate: string;
+  weekdays: number[];
+  workStart: string;
+  workEnd: string;
+  breakStart?: string;
+  breakEnd?: string;
+  slotMinutes: number;
+}
+
 export async function listAvailabilities(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -41,6 +52,17 @@ export async function updateAvailability(
     request.body,
   );
   reply.send({ availability });
+}
+
+export async function generateAvailabilities(
+  request: FastifyRequest<{ Body: GenerateAvailabilitiesBody }>,
+  reply: FastifyReply,
+): Promise<void> {
+  const result = await availabilityService.generateAvailabilities(
+    request.user.sub,
+    request.body,
+  );
+  reply.status(201).send(result);
 }
 
 export async function deleteAvailability(

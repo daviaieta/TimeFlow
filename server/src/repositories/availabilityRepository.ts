@@ -21,6 +21,27 @@ export const availabilityRepository = {
     });
   },
 
+  findManyByEmployeeInRange(employeeId: number, from: Date, to: Date) {
+    return prisma.availability.findMany({
+      where: { employeeId, date: { gte: from, lte: to } },
+    });
+  },
+
+  createMany(
+    employeeId: number,
+    slots: { date: string; startTime: string; endTime: string }[],
+  ) {
+    return prisma.availability.createMany({
+      data: slots.map((slot) => ({
+        employeeId,
+        date: new Date(slot.date),
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+      })),
+      skipDuplicates: true, // backstop: @@unique([employeeId, date, startTime])
+    });
+  },
+
   findManyFreeByEmployee(employeeId: number) {
     return prisma.availability.findMany({
       where: { employeeId, isBooked: false },
