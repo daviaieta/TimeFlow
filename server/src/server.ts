@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import { AppError } from "./lib/errors";
 import { authRoutes } from "./routes/authRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
+import { serviceRoutes } from "./routes/serviceRoutes";
 import "./interfaces/auth";
 
 const app = fastify({
@@ -45,6 +46,7 @@ app.get("/", async () => {
 
 app.register(authRoutes);
 app.register(businessRoutes);
+app.register(serviceRoutes);
 
 app.listen({
   port: env.port,
