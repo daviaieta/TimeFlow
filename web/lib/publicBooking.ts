@@ -1,7 +1,13 @@
 // Tipos espelhando a API pública (/public/businesses/:slug).
+export interface NextSlot {
+  date: string;
+  startTime: string;
+}
+
 export interface PublicEmployee {
   id: number;
   name: string;
+  nextSlot: NextSlot | null;
 }
 
 export interface PublicService {
@@ -14,6 +20,7 @@ export interface PublicService {
 
 export interface PublicBusiness {
   business: { name: string; slug: string };
+  professionals: PublicEmployee[];
   services: PublicService[];
 }
 
@@ -65,6 +72,29 @@ export function dayChipLabel(dayKey: string, todayKey: string): string {
   const day = String(date.getDate()).padStart(2, "0");
   const month = MONTHS[date.getMonth()];
   return `${weekday}, ${day} ${month}`;
+}
+
+export function nextSlotLabel(slot: NextSlot, todayKey: string): string {
+  return `${dayChipLabel(slot.date.slice(0, 10), todayKey)} ${slot.startTime}`;
+}
+
+// Menor próximo horário entre vários profissionais (ex.: os de um serviço).
+export function earliestNextSlot(employees: PublicEmployee[]): NextSlot | null {
+  let earliest: NextSlot | null = null;
+
+  for (const employee of employees) {
+    const slot = employee.nextSlot;
+    if (!slot) continue;
+
+    const isEarlier =
+      earliest === null ||
+      slot.date < earliest.date ||
+      (slot.date === earliest.date && slot.startTime < earliest.startTime);
+
+    if (isEarlier) earliest = slot;
+  }
+
+  return earliest;
 }
 
 export function isValidPhone(value: string): boolean {

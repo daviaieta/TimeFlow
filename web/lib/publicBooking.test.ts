@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   dayChipLabel,
+  earliestNextSlot,
   formatPrice,
   groupSlotsByDay,
   isValidPhone,
+  nextSlotLabel,
   type PublicSlot,
 } from "./publicBooking.ts";
 
@@ -44,6 +46,40 @@ test("telefone válido tem pelo menos 8 dígitos", () => {
   assert.equal(isValidPhone("11999990000"), true);
   assert.equal(isValidPhone("123"), false);
   assert.equal(isValidPhone("abc-def"), false);
+});
+
+test("rótulo do próximo horário", () => {
+  assert.equal(
+    nextSlotLabel({ date: "2026-07-24T00:00:00.000Z", startTime: "14:00" }, "2026-07-24"),
+    "Hoje 14:00",
+  );
+  assert.equal(
+    nextSlotLabel({ date: "2026-07-27T00:00:00.000Z", startTime: "09:00" }, "2026-07-24"),
+    "seg, 27 jul 09:00",
+  );
+});
+
+test("menor próximo horário entre profissionais", () => {
+  const earliest = earliestNextSlot([
+    { id: 1, name: "A", nextSlot: { date: "2026-07-27T00:00:00.000Z", startTime: "09:00" } },
+    { id: 2, name: "B", nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" } },
+    { id: 3, name: "C", nextSlot: null },
+  ]);
+
+  assert.deepEqual(earliest, { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" });
+});
+
+test("mesmo dia desempata pelo horário", () => {
+  const earliest = earliestNextSlot([
+    { id: 1, name: "A", nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" } },
+    { id: 2, name: "B", nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "09:30" } },
+  ]);
+
+  assert.equal(earliest?.startTime, "09:30");
+});
+
+test("ninguém com vaga devolve null", () => {
+  assert.equal(earliestNextSlot([{ id: 1, name: "A", nextSlot: null }]), null);
 });
 
 test("preço decimal vira moeda brasileira", () => {
