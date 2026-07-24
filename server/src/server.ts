@@ -1,6 +1,7 @@
 import "dotenv/config";
 import fastifyCors from "@fastify/cors";
 import fastifyJwt from "@fastify/jwt";
+import { Prisma } from "@prisma/client";
 import { fastify, FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { env } from "./config/env";
 import { AppError } from "./lib/errors";
@@ -36,6 +37,22 @@ app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: Fastif
 
   if (error.validation) {
     return reply.status(400).send({ message: error.message });
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      return reply.status(409).send({ message: "Resource already exists" });
+    }
+
+    if (error.code === "P2025") {
+      return reply.status(404).send({ message: "Resource not found" });
+    }
+
+    if (error.code === "P2003") {
+      return reply
+        .status(409)
+        .send({ message: "Resource is referenced by other records" });
+    }
   }
 
   request.log.error(error);

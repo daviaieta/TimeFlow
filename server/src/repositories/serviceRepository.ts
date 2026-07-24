@@ -19,11 +19,25 @@ export const serviceRepository = {
   },
 
   create(businessId: number, data: ServiceData) {
-    return prisma.service.create({ data: { ...data, businessId } });
+    return prisma.service.create({
+      data: {
+        name: data.name,
+        duration: data.duration,
+        price: data.price,
+        businessId,
+      },
+    });
   },
 
   update(id: number, data: ServiceData) {
-    return prisma.service.update({ where: { id }, data });
+    return prisma.service.update({
+      where: { id },
+      data: {
+        name: data.name,
+        duration: data.duration,
+        price: data.price,
+      },
+    });
   },
 
   countBookings(serviceId: number) {

@@ -15,6 +15,7 @@ const serviceBodySchema = {
   body: {
     type: "object",
     required: ["name", "duration", "price"],
+    additionalProperties: false,
     properties: {
       name: { type: "string", minLength: 1 },
       duration: { type: "integer", minimum: 1 },

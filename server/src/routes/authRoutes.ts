@@ -6,6 +6,7 @@ const loginSchema = {
   body: {
     type: "object",
     required: ["email", "password"],
+    additionalProperties: false,
     properties: {
       email: { type: "string" },
       password: { type: "string", minLength: 1 },
@@ -17,6 +18,7 @@ const acceptInviteSchema = {
   body: {
     type: "object",
     required: ["token", "password"],
+    additionalProperties: false,
     properties: {
       token: { type: "string", minLength: 1 },
       password: { type: "string", minLength: 8 },

@@ -15,6 +15,7 @@ const availabilityBodySchema = {
   body: {
     type: "object",
     required: ["date", "startTime", "endTime"],
+    additionalProperties: false,
     properties: {
       date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
       startTime: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },

@@ -16,6 +16,7 @@ const createEmployeeSchema = {
   body: {
     type: "object",
     required: ["name", "email"],
+    additionalProperties: false,
     properties: {
       name: { type: "string", minLength: 1 },
       email: { type: "string", format: "email" },
@@ -38,6 +39,7 @@ const linkServiceSchema = {
   body: {
     type: "object",
     required: ["serviceId"],
+    additionalProperties: false,
     properties: {
       serviceId: { type: "integer" },
     },
