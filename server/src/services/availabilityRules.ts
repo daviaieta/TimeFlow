@@ -20,7 +20,7 @@ export interface AvailabilityRow {
   endTime: string;
   isBooked: boolean;
   clientName: string | null;
-  booking: { id: number } | null;
+  booking: { id: number; clientName: string } | null;
 }
 
 export interface AvailabilityDto {
@@ -61,7 +61,9 @@ export function toAvailabilityDto(row: AvailabilityRow): AvailabilityDto {
     startTime: row.startTime,
     endTime: row.endTime,
     isBooked: row.isBooked,
-    clientName: row.clientName,
+    // O encaixe manual tem precedência: se o colaborador anotou um nome, é o
+    // dele que ele espera ver. Sem anotação, cai no nome de quem reservou.
+    clientName: row.clientName ?? row.booking?.clientName ?? null,
     locked: row.booking !== null,
   };
 }

@@ -3,7 +3,7 @@ import { AvailabilityData } from "../services/availabilityRules";
 
 // O booking é o que distingue reserva de cliente externo (intocável) de
 // encaixe manual (editável pelo dono).
-const withBooking = { booking: { select: { id: true } } };
+const withBooking = { booking: { select: { id: true, clientName: true } } };
 
 export const availabilityRepository = {
   findManyByEmployee(employeeId: number) {
