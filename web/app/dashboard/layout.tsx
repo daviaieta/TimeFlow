@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Calendar03Icon,
@@ -13,14 +13,39 @@ import {
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { fetchAdapter } from "@/adapters/fetchAdapter";
-import { AuthUser, clearToken, getToken } from "@/lib/auth";
+import { AuthUser, Role, clearToken, getToken } from "@/lib/auth";
 import { AuthUserProvider } from "./auth-context";
 
-const navItems = [
-  { label: "Visão geral", href: "/dashboard", icon: DashboardSquare01Icon },
-  { label: "Serviços", href: "#", icon: Scissor01Icon, soon: true },
-  { label: "Equipe", href: "#", icon: UserGroupIcon, soon: true },
-  { label: "Agenda", href: "#", icon: Calendar03Icon, soon: true },
+const navItems: {
+  label: string;
+  href: string;
+  icon: typeof DashboardSquare01Icon;
+  roles: Role[];
+}[] = [
+  {
+    label: "Visão geral",
+    href: "/dashboard",
+    icon: DashboardSquare01Icon,
+    roles: ["SUPERADMIN", "ADMIN", "EMPLOYEE"],
+  },
+  {
+    label: "Serviços",
+    href: "/dashboard/services",
+    icon: Scissor01Icon,
+    roles: ["ADMIN", "EMPLOYEE"],
+  },
+  {
+    label: "Equipe",
+    href: "/dashboard/team",
+    icon: UserGroupIcon,
+    roles: ["ADMIN", "EMPLOYEE"],
+  },
+  {
+    label: "Agenda",
+    href: "/dashboard/schedule",
+    icon: Calendar03Icon,
+    roles: ["EMPLOYEE"],
+  },
 ];
 
 const roleLabels: Record<AuthUser["role"], string> = {
@@ -33,6 +58,7 @@ export default function DashboardLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
@@ -72,26 +98,28 @@ export default function DashboardLayout({
           </a>
 
           <nav className="mt-8 flex flex-col gap-1">
-            {navItems.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                aria-disabled={item.soon}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  item.soon
-                    ? "pointer-events-none text-muted-foreground/60"
-                    : "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                }`}
-              >
-                <HugeiconsIcon icon={item.icon} className="size-4 shrink-0" />
-                {item.label}
-                {item.soon && (
-                  <span className="ml-auto rounded-full border px-1.5 py-0.5 text-[10px] uppercase">
-                    em breve
-                  </span>
-                )}
-              </a>
-            ))}
+            {navItems
+              .filter((item) => item.roles.includes(user.role))
+              .map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <HugeiconsIcon
+                      icon={item.icon}
+                      className="size-4 shrink-0"
+                    />
+                    {item.label}
+                  </a>
+                );
+              })}
           </nav>
 
           <div className="mt-auto border-t pt-4">
