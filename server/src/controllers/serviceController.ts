@@ -12,10 +12,7 @@ export interface ServiceParams {
   id: number;
 }
 
-export async function listServices(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
+export async function listServices(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const services = await serviceService.listServices(requireBusinessId(request));
   reply.send({ services });
 }
@@ -24,10 +21,7 @@ export async function createService(
   request: FastifyRequest<{ Body: ServiceBody }>,
   reply: FastifyReply,
 ): Promise<void> {
-  const service = await serviceService.createService(
-    requireBusinessId(request),
-    request.body,
-  );
+  const service = await serviceService.createService(requireBusinessId(request), request.body);
   reply.status(201).send({ service });
 }
 
