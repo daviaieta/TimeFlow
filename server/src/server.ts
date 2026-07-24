@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import { AppError } from "./lib/errors";
 import { authRoutes } from "./routes/authRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
+import { employeeRoutes } from "./routes/employeeRoutes";
 import { serviceRoutes } from "./routes/serviceRoutes";
 import "./interfaces/auth";
 
@@ -47,6 +48,7 @@ app.get("/", async () => {
 app.register(authRoutes);
 app.register(businessRoutes);
 app.register(serviceRoutes);
+app.register(employeeRoutes);
 
 app.listen({
   port: env.port,

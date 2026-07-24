@@ -17,6 +17,10 @@ export const businessRepository = {
     return prisma.business.findUnique({ where: { slug } });
   },
 
+  findById(id: number) {
+    return prisma.business.findUnique({ where: { id } });
+  },
+
   createWithAdmin({ name, slug, admin }: CreateWithAdminInput) {
     return prisma.business.create({
       data: {
