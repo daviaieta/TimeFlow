@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Cancel01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Employee, Service } from "@/lib/types";
+import { Employee, EmployeeServiceLink, Service } from "@/lib/types";
 import { useAuthUser } from "../auth-context";
 
 export default function TeamPage() {
@@ -61,6 +61,13 @@ export default function TeamPage() {
     employeeId: number;
     message: string;
   } | null>(null);
+
+  const [unlinking, setUnlinking] = useState<{
+    employee: Employee;
+    service: EmployeeServiceLink;
+  } | null>(null);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
+  const [unlinkSubmitting, setUnlinkSubmitting] = useState(false);
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -148,6 +155,25 @@ export default function TeamPage() {
       setRemoveError(err instanceof ApiError ? err.message : "Erro inesperado.");
     } finally {
       setRemoveSubmitting(false);
+    }
+  }
+
+  async function handleUnlink() {
+    if (!unlinking) return;
+    setUnlinkError(null);
+    setUnlinkSubmitting(true);
+
+    try {
+      await fetchAdapter({
+        method: "DELETE",
+        path: `/employees/${unlinking.employee.id}/services/${unlinking.service.id}`,
+      });
+      setUnlinking(null);
+      await loadData();
+    } catch (err) {
+      setUnlinkError(err instanceof ApiError ? err.message : "Erro inesperado.");
+    } finally {
+      setUnlinkSubmitting(false);
     }
   }
 
@@ -258,8 +284,24 @@ export default function TeamPage() {
                 {employee.services.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {employee.services.map((service) => (
-                      <Badge key={service.id} variant="secondary">
+                      <Badge
+                        key={service.id}
+                        variant="secondary"
+                        className={isAdmin ? "gap-1 pr-1" : undefined}
+                      >
                         {service.name}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            aria-label={`Desvincular ${service.name}`}
+                            onClick={() => {
+                              setUnlinkError(null);
+                              setUnlinking({ employee, service });
+                            }}
+                          >
+                            <HugeiconsIcon icon={Cancel01Icon} size={12} />
+                          </button>
+                        )}
                       </Badge>
                     ))}
                   </div>
@@ -361,6 +403,47 @@ export default function TeamPage() {
                 </>
               ) : (
                 "Remover"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={unlinking !== null}
+        onOpenChange={(open) => {
+          if (!open) setUnlinking(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular serviço</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja desvincular “{unlinking?.service.name}” de “
+              {unlinking?.employee.name}”?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {unlinkError && (
+            <p className="text-sm text-destructive">{unlinkError}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unlinkSubmitting}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={unlinkSubmitting}
+              onClick={() => {
+                void handleUnlink();
+              }}
+            >
+              {unlinkSubmitting ? (
+                <>
+                  <Spinner data-icon="inline-start" />
+                  Desvinculando…
+                </>
+              ) : (
+                "Desvincular"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
