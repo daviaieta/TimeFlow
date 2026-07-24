@@ -4,6 +4,7 @@ import fastifyJwt from "@fastify/jwt";
 import { fastify, FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { env } from "./config/env";
 import { AppError } from "./lib/errors";
+import { availabilityRoutes } from "./routes/availabilityRoutes";
 import { authRoutes } from "./routes/authRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
 import { employeeRoutes } from "./routes/employeeRoutes";
@@ -49,6 +50,7 @@ app.register(authRoutes);
 app.register(businessRoutes);
 app.register(serviceRoutes);
 app.register(employeeRoutes);
+app.register(availabilityRoutes);
 
 app.listen({
   port: env.port,
