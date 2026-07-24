@@ -72,13 +72,14 @@ model EmployeeService {
 }
 
 model Availability {
-  id        Int      @id @default(autoincrement())
-  date      DateTime
-  startTime String
-  endTime   String
-  isBooked  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  date       DateTime
+  startTime  String
+  endTime    String
+  isBooked   Boolean  @default(false)
+  clientName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   employee   User @relation(fields: [employeeId], references: [id])
   employeeId Int
