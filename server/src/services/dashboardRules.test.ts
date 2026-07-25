@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SlotRow, buildKpis, formatCents, toCents } from "./dashboardRules";
+import { SlotRow, buildKpis, formatCents, toCents, bucketOccupancy, buildHeatmap } from "./dashboardRules";
 
 // Helper local: monta um slot com o mínimo e deixa o teste declarar só o que importa.
 function slot(overrides: Partial<SlotRow> = {}): SlotRow {
@@ -91,4 +91,68 @@ test("ritmo repassa as contagens de reservas criadas", () => {
 
   assert.equal(kpis.pace.current, 12);
   assert.equal(kpis.pace.previous, 8);
+});
+
+test("janela de 7 dias gera um bucket por dia, inclusive dias vazios", () => {
+  const from = new Date("2026-07-25T00:00:00.000Z"); // sábado
+  const buckets = bucketOccupancy(
+    [
+      booked("50.00", { date: new Date("2026-07-25T00:00:00.000Z") }),
+      slot({ id: 2, date: new Date("2026-07-25T00:00:00.000Z") }),
+      slot({ id: 3, date: new Date("2026-07-27T00:00:00.000Z") }),
+    ],
+    7,
+    from,
+  );
+
+  assert.equal(buckets.length, 7);
+  assert.equal(buckets[0].key, "2026-07-25");
+  assert.equal(buckets[0].label, "sáb 25");
+  assert.equal(buckets[0].booked, 1);
+  assert.equal(buckets[0].free, 1);
+  assert.equal(buckets[1].booked, 0);
+  assert.equal(buckets[1].free, 0);
+  assert.equal(buckets[2].free, 1);
+});
+
+test("janela de 30 dias agrupa por semana", () => {
+  const from = new Date("2026-07-25T00:00:00.000Z");
+  const buckets = bucketOccupancy(
+    [
+      slot({ date: new Date("2026-07-26T00:00:00.000Z") }),
+      slot({ id: 2, date: new Date("2026-08-05T00:00:00.000Z") }),
+    ],
+    30,
+    from,
+  );
+
+  assert.equal(buckets.length, 5); // ceil(30 / 7)
+  assert.equal(buckets[0].key, "2026-07-25"); // 25–31 jul
+  assert.equal(buckets[0].free, 1);
+  assert.equal(buckets[1].key, "2026-08-01"); // 1–7 ago
+  assert.equal(buckets[1].label, "1–7 ago");
+  assert.equal(buckets[1].free, 1); // o slot de 05/08 cai nesta semana
+  assert.equal(buckets[2].free, 0);
+});
+
+test("semana que cruza o mês mostra os dois meses no rótulo", () => {
+  const buckets = bucketOccupancy([], 30, new Date("2026-07-28T00:00:00.000Z"));
+
+  assert.equal(buckets[0].label, "28 jul–3 ago");
+});
+
+test("mapa de calor agrupa por dia da semana e hora, em UTC", () => {
+  const cells = buildHeatmap([
+    booked("50.00", { date: new Date("2026-07-27T00:00:00.000Z"), startTime: "09:00" }),
+    slot({ id: 2, date: new Date("2026-07-27T00:00:00.000Z"), startTime: "09:30" }),
+    slot({ id: 3, date: new Date("2026-07-28T00:00:00.000Z"), startTime: "14:00" }),
+  ]);
+
+  assert.equal(cells.length, 2);
+  assert.deepEqual(cells[0], { weekday: 1, hour: 9, booked: 1, total: 2 });
+  assert.deepEqual(cells[1], { weekday: 2, hour: 14, booked: 0, total: 1 });
+});
+
+test("mapa de calor não emite célula sem nenhum horário", () => {
+  assert.deepEqual(buildHeatmap([]), []);
 });
