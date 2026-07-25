@@ -193,3 +193,87 @@ export function buildHeatmap(slots: SlotRow[]): HeatmapCell[] {
     (a, b) => a.weekday - b.weekday || a.hour - b.hour,
   );
 }
+
+export interface TeamRow {
+  id: number;
+  name: string;
+  pendingInvite: boolean;
+  slots: number;
+  booked: number;
+  rate: number;
+  revenue: string;
+}
+
+export interface ServiceRankRow {
+  id: number;
+  name: string;
+  bookings: number;
+  revenue: string;
+  share: number;
+}
+
+// Colaborador sem nenhum horário na janela cai para o fim: ocupação 0 de 0
+// não é desempenho ruim, é agenda fechada — outra conversa com o dono.
+export function rankTeam(slots: SlotRow[], employees: EmployeeRow[]): TeamRow[] {
+  const rows = employees.map<TeamRow>((employee) => {
+    const own = slots.filter((slot) => slot.employeeId === employee.id);
+    const booked = own.filter((slot) => slot.isBooked);
+    const revenueCents = booked.reduce(
+      (sum, slot) => sum + (slot.booking ? toCents(slot.booking.service.price) : 0),
+      0,
+    );
+
+    return {
+      id: employee.id,
+      name: employee.name,
+      pendingInvite: employee.pendingInvite,
+      slots: own.length,
+      booked: booked.length,
+      rate: own.length === 0 ? 0 : booked.length / own.length,
+      revenue: formatCents(revenueCents),
+    };
+  });
+
+  return rows.sort((a, b) => {
+    const aEmpty = a.slots === 0 ? 1 : 0;
+    const bEmpty = b.slots === 0 ? 1 : 0;
+
+    return (
+      aEmpty - bEmpty ||
+      b.rate - a.rate ||
+      b.booked - a.booked ||
+      a.name.localeCompare(b.name, "pt-BR")
+    );
+  });
+}
+
+export function rankServices(slots: SlotRow[]): ServiceRankRow[] {
+  const totals = new Map<number, { name: string; bookings: number; cents: number }>();
+
+  for (const slot of slots) {
+    if (!slot.booking) continue;
+
+    const { id, name, price } = slot.booking.service;
+    const entry = totals.get(id) ?? { name, bookings: 0, cents: 0 };
+    entry.bookings += 1;
+    entry.cents += toCents(price);
+    totals.set(id, entry);
+  }
+
+  const totalCents = [...totals.values()].reduce((sum, e) => sum + e.cents, 0);
+
+  return [...totals.entries()]
+    .map<ServiceRankRow>(([id, entry]) => ({
+      id,
+      name: entry.name,
+      bookings: entry.bookings,
+      revenue: formatCents(entry.cents),
+      share: totalCents === 0 ? 0 : entry.cents / totalCents,
+    }))
+    .sort(
+      (a, b) =>
+        b.share - a.share ||
+        b.bookings - a.bookings ||
+        a.name.localeCompare(b.name, "pt-BR"),
+    );
+}

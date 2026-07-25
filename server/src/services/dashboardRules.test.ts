@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SlotRow, buildKpis, formatCents, toCents, bucketOccupancy, buildHeatmap } from "./dashboardRules";
+import { SlotRow, buildKpis, formatCents, toCents, bucketOccupancy, buildHeatmap, rankTeam, rankServices } from "./dashboardRules";
 
 // Helper local: monta um slot com o mínimo e deixa o teste declarar só o que importa.
 function slot(overrides: Partial<SlotRow> = {}): SlotRow {
@@ -155,4 +155,96 @@ test("mapa de calor agrupa por dia da semana e hora, em UTC", () => {
 
 test("mapa de calor não emite célula sem nenhum horário", () => {
   assert.deepEqual(buildHeatmap([]), []);
+});
+
+test("todo colaborador aparece no ranking, mesmo sem agenda aberta", () => {
+  const rows = rankTeam(
+    [booked("50.00", { employeeId: 1 }), slot({ id: 2, employeeId: 1 })],
+    [
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [] },
+    ],
+  );
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].name, "Ana");
+  assert.equal(rows[0].slots, 2);
+  assert.equal(rows[0].booked, 1);
+  assert.equal(rows[0].rate, 0.5);
+  assert.equal(rows[0].revenue, "50.00");
+
+  assert.equal(rows[1].name, "Bruno");
+  assert.equal(rows[1].slots, 0);
+  assert.equal(rows[1].rate, 0);
+});
+
+test("quem não tem agenda vai para o fim, mesmo com ocupação teórica maior", () => {
+  const rows = rankTeam(
+    [slot({ employeeId: 2 }), slot({ id: 2, employeeId: 2 })],
+    [
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [] },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [] },
+    ],
+  );
+
+  assert.equal(rows[0].name, "Bruno"); // tem agenda, ocupação 0
+  assert.equal(rows[1].name, "Ana"); // sem agenda
+});
+
+test("ranking da equipe ordena por ocupação decrescente", () => {
+  const rows = rankTeam(
+    [
+      booked("10.00", { employeeId: 1 }),
+      slot({ id: 2, employeeId: 1 }),
+      booked("10.00", { id: 3, employeeId: 2 }),
+      booked("10.00", { id: 4, employeeId: 2 }),
+    ],
+    [
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [] },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [] },
+    ],
+  );
+
+  assert.equal(rows[0].name, "Bruno");
+  assert.equal(rows[0].rate, 1);
+  assert.equal(rows[1].name, "Ana");
+});
+
+test("serviços rankeiam por receita e o share soma 1", () => {
+  const corte = (id: number) =>
+    booked("30.00", { id, booking: {
+      clientName: "C", clientPhone: "1",
+      service: { id: 1, name: "Corte", price: "30.00" },
+    } });
+  const barba = booked("70.00", { id: 9, booking: {
+    clientName: "C", clientPhone: "1",
+    service: { id: 2, name: "Barba", price: "70.00" },
+  } });
+
+  const rows = rankServices([corte(1), corte(2), barba]);
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].name, "Barba");
+  assert.equal(rows[0].bookings, 1);
+  assert.equal(rows[0].revenue, "70.00");
+  assert.equal(rows[1].name, "Corte");
+  assert.equal(rows[1].bookings, 2);
+  assert.equal(rows[1].revenue, "60.00");
+  assert.equal(Math.round((rows[0].share + rows[1].share) * 100), 100);
+});
+
+test("serviços com receita zero têm share zero, não NaN", () => {
+  const rows = rankServices([
+    booked("0.00", { booking: {
+      clientName: "C", clientPhone: "1",
+      service: { id: 1, name: "Cortesia", price: "0.00" },
+    } }),
+  ]);
+
+  assert.equal(rows[0].share, 0);
+  assert.equal(rows[0].revenue, "0.00");
+});
+
+test("encaixe manual não entra no ranking de serviços", () => {
+  assert.deepEqual(rankServices([slot({ isBooked: true, clientName: "Encaixe" })]), []);
 });
