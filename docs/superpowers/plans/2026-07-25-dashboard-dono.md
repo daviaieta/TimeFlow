@@ -724,7 +724,7 @@ git commit -m "feat(server): add team and service ranking rules"
 
 **Interfaces:**
 - Consumes: `SlotRow`, `EmployeeRow`, `CatalogServiceRow` (Task 1); `isSlotUpcoming` de `./publicBookingRules` (já existe).
-- Produces: `UpcomingSlotRow`, `UpcomingRow`, `AlertKind`, `DashboardAlert`, `buildUpcoming(rows: UpcomingSlotRow[], now: Date, limit: number): UpcomingRow[]`, `buildAlerts(slots: SlotRow[], employees: EmployeeRow[], services: CatalogServiceRow[], from: Date, days: number): DashboardAlert[]`.
+- Produces: `UpcomingSlotRow`, `UpcomingRow`, `AlertKind`, `DashboardAlert`, `buildUpcoming(rows: UpcomingSlotRow[], now: Date, limit: number): UpcomingRow[]`, `buildAlerts(slots: SlotRow[], employees: EmployeeRow[], services: CatalogServiceRow[], days: number): DashboardAlert[]`.
 
 `buildUpcoming` recebe o resultado da query dedicada de próximos reservados — **não** os slots da janela, porque a lista operacional ignora o seletor de período.
 
@@ -817,7 +817,6 @@ test("alerta lista colaboradores sem nenhum horário aberto", () => {
       { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [1] },
     ],
     [{ id: 1, name: "Corte" }],
-    from,
     7,
   );
 
@@ -831,7 +830,6 @@ test("alerta lista serviços sem profissional vinculado", () => {
     [],
     [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] }],
     [{ id: 1, name: "Corte" }, { id: 2, name: "Barba" }],
-    from,
     7,
   );
 
@@ -849,7 +847,6 @@ test("alerta conta dias sem nenhum horário livre", () => {
     ],
     [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [] }],
     [],
-    from,
     7,
   );
 
@@ -863,7 +860,6 @@ test("alerta conta convites pendentes", () => {
     [],
     [{ id: 1, name: "Ana", pendingInvite: true, serviceIds: [] }],
     [],
-    from,
     7,
   );
 
@@ -877,7 +873,6 @@ test("negócio saudável não gera alerta nenhum", () => {
     [slot({ employeeId: 1 })],
     [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] }],
     [{ id: 1, name: "Corte" }],
-    from,
     7,
   );
 
@@ -973,7 +968,6 @@ export function buildAlerts(
   slots: SlotRow[],
   employees: EmployeeRow[],
   services: CatalogServiceRow[],
-  from: Date,
   days: number,
 ): DashboardAlert[] {
   const alerts: DashboardAlert[] = [];
@@ -1039,8 +1033,6 @@ export function buildAlerts(
   return alerts;
 }
 ```
-
-Nota: `from` fica no parâmetro por simetria com `days` e para o caso de a regra de dias cheios passar a olhar só o futuro. Se o linter reclamar de parâmetro não usado, prefixe com `_from`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1235,7 +1227,7 @@ export const dashboardService = {
       team: rankTeam(slots, employeeRows),
       services: rankServices(slots),
       upcoming: buildUpcoming(upcomingRows, now, UPCOMING_LIMIT),
-      alerts: buildAlerts(slots, employeeRows, catalog, from, days),
+      alerts: buildAlerts(slots, employeeRows, catalog, days),
     };
   },
 };
