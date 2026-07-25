@@ -1,3 +1,5 @@
+import { isSlotUpcoming } from "./publicBookingRules";
+
 // price chega como Prisma Decimal em produção e como string nos testes —
 // ambos respondem a toString(). Mesmo contrato de publicBookingRules.
 export interface PriceLike {
@@ -276,4 +278,143 @@ export function rankServices(slots: SlotRow[]): ServiceRankRow[] {
         b.bookings - a.bookings ||
         a.name.localeCompare(b.name, "pt-BR"),
     );
+}
+
+// Linha da query dedicada de próximos reservados. Formato diferente de
+// SlotRow porque aqui interessa o nome do profissional, não o id.
+export interface UpcomingSlotRow {
+  id: number;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  clientName: string | null;
+  employee: { name: string };
+  booking: {
+    clientName: string;
+    clientPhone: string;
+    service: { name: string };
+  } | null;
+}
+
+export interface UpcomingRow {
+  availabilityId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  clientName: string;
+  clientPhone: string | null;
+  serviceName: string | null;
+  employeeName: string;
+}
+
+export type AlertKind =
+  | "employee-no-slots"
+  | "service-no-employee"
+  | "day-fully-booked"
+  | "pending-invite";
+
+export interface DashboardAlert {
+  kind: AlertKind;
+  label: string;
+  count: number;
+}
+
+function plural(count: number, one: string, many: string): string {
+  return count === 1 ? one : many;
+}
+
+export function buildUpcoming(
+  rows: UpcomingSlotRow[],
+  now: Date,
+  limit: number,
+): UpcomingRow[] {
+  return rows
+    .filter((row) => isSlotUpcoming(row, now))
+    .sort(
+      (a, b) =>
+        a.date.getTime() - b.date.getTime() ||
+        a.startTime.localeCompare(b.startTime),
+    )
+    .slice(0, limit)
+    .map((row) => ({
+      availabilityId: row.id,
+      date: row.date.toISOString().slice(0, 10),
+      startTime: row.startTime,
+      endTime: row.endTime,
+      // Booking manda no nome: é o cliente que de fato reservou.
+      clientName: row.booking?.clientName ?? row.clientName ?? "Cliente",
+      clientPhone: row.booking?.clientPhone ?? null,
+      serviceName: row.booking?.service.name ?? null,
+      employeeName: row.employee.name,
+    }));
+}
+
+// Alertas são texto pronto: quem monta a frase é quem conhece a regra, não a UI.
+export function buildAlerts(
+  slots: SlotRow[],
+  employees: EmployeeRow[],
+  services: CatalogServiceRow[],
+  days: number,
+): DashboardAlert[] {
+  const alerts: DashboardAlert[] = [];
+
+  const withSlots = new Set(slots.map((slot) => slot.employeeId));
+  const idle = employees.filter(
+    // Convite pendente já tem alerta próprio — não cobrar agenda de quem
+    // ainda nem entrou.
+    (employee) => !employee.pendingInvite && !withSlots.has(employee.id),
+  ).length;
+
+  if (idle > 0) {
+    alerts.push({
+      kind: "employee-no-slots",
+      count: idle,
+      label:
+        `${idle} ${plural(idle, "colaborador", "colaboradores")} sem horários ` +
+        `abertos nos próximos ${days} dias`,
+    });
+  }
+
+  const linked = new Set(employees.flatMap((employee) => employee.serviceIds));
+  const orphan = services.filter((service) => !linked.has(service.id)).length;
+
+  if (orphan > 0) {
+    alerts.push({
+      kind: "service-no-employee",
+      count: orphan,
+      label: `${orphan} ${plural(orphan, "serviço", "serviços")} sem profissional vinculado`,
+    });
+  }
+
+  const perDay = new Map<string, { total: number; free: number }>();
+  for (const slot of slots) {
+    const key = slot.date.toISOString().slice(0, 10);
+    const entry = perDay.get(key) ?? { total: 0, free: 0 };
+    entry.total += 1;
+    if (!slot.isBooked) entry.free += 1;
+    perDay.set(key, entry);
+  }
+
+  const fullDays = [...perDay.values()].filter(
+    (entry) => entry.total > 0 && entry.free === 0,
+  ).length;
+
+  if (fullDays > 0) {
+    alerts.push({
+      kind: "day-fully-booked",
+      count: fullDays,
+      label: `${fullDays} ${plural(fullDays, "dia", "dias")} sem nenhum horário livre`,
+    });
+  }
+
+  const pending = employees.filter((employee) => employee.pendingInvite).length;
+  if (pending > 0) {
+    alerts.push({
+      kind: "pending-invite",
+      count: pending,
+      label: `${pending} ${plural(pending, "convite pendente", "convites pendentes")}`,
+    });
+  }
+
+  return alerts;
 }

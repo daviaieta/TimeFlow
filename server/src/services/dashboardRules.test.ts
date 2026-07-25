@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SlotRow, buildKpis, formatCents, toCents, bucketOccupancy, buildHeatmap, rankTeam, rankServices } from "./dashboardRules";
+import { SlotRow, buildKpis, formatCents, toCents, bucketOccupancy, buildHeatmap, rankTeam, rankServices, buildUpcoming, buildAlerts, UpcomingSlotRow } from "./dashboardRules";
 
 // Helper local: monta um slot com o mínimo e deixa o teste declarar só o que importa.
 function slot(overrides: Partial<SlotRow> = {}): SlotRow {
@@ -27,6 +27,23 @@ function booked(price: string, overrides: Partial<SlotRow> = {}): SlotRow {
     },
     ...overrides,
   });
+}
+
+function upcomingRow(overrides: Partial<UpcomingSlotRow> = {}): UpcomingSlotRow {
+  return {
+    id: 1,
+    date: new Date("2026-07-25T00:00:00.000Z"),
+    startTime: "14:00",
+    endTime: "15:00",
+    clientName: null,
+    employee: { name: "Ana" },
+    booking: {
+      clientName: "Marcos",
+      clientPhone: "11988887777",
+      service: { name: "Corte" },
+    },
+    ...overrides,
+  };
 }
 
 test("centavos convertem sem erro de float", () => {
@@ -247,4 +264,132 @@ test("serviços com receita zero têm share zero, não NaN", () => {
 
 test("encaixe manual não entra no ranking de serviços", () => {
   assert.deepEqual(rankServices([slot({ isBooked: true, clientName: "Encaixe" })]), []);
+});
+
+test("próxima reserva expõe cliente, telefone, serviço e profissional", () => {
+  const rows = buildUpcoming([upcomingRow()], new Date("2026-07-25T10:00:00"), 8);
+
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], {
+    availabilityId: 1,
+    date: "2026-07-25",
+    startTime: "14:00",
+    endTime: "15:00",
+    clientName: "Marcos",
+    clientPhone: "11988887777",
+    serviceName: "Corte",
+    employeeName: "Ana",
+  });
+});
+
+test("encaixe manual entra sem serviço nem telefone", () => {
+  const rows = buildUpcoming(
+    [upcomingRow({ clientName: "Encaixe do Zé", booking: null })],
+    new Date("2026-07-25T10:00:00"),
+    8,
+  );
+
+  assert.equal(rows[0].clientName, "Encaixe do Zé");
+  assert.equal(rows[0].clientPhone, null);
+  assert.equal(rows[0].serviceName, null);
+});
+
+test("slot de hoje que já passou não entra em próximas reservas", () => {
+  const rows = buildUpcoming(
+    [
+      upcomingRow({ id: 1, startTime: "08:00", endTime: "09:00" }),
+      upcomingRow({ id: 2, startTime: "16:00", endTime: "17:00" }),
+    ],
+    new Date("2026-07-25T10:00:00"),
+    8,
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].availabilityId, 2);
+});
+
+test("próximas reservas respeitam o limite e a ordem cronológica", () => {
+  const rows = buildUpcoming(
+    [
+      upcomingRow({ id: 2, date: new Date("2026-07-26T00:00:00.000Z"), startTime: "09:00" }),
+      upcomingRow({ id: 1, startTime: "16:00" }),
+      upcomingRow({ id: 3, date: new Date("2026-07-27T00:00:00.000Z"), startTime: "09:00" }),
+    ],
+    new Date("2026-07-25T10:00:00"),
+    2,
+  );
+
+  assert.deepEqual(rows.map((r) => r.availabilityId), [1, 2]);
+});
+
+const from = new Date("2026-07-25T00:00:00.000Z");
+
+test("alerta lista colaboradores sem nenhum horário aberto", () => {
+  const alerts = buildAlerts(
+    [slot({ employeeId: 1 })],
+    [
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [1] },
+    ],
+    [{ id: 1, name: "Corte" }],
+    7,
+  );
+
+  const alert = alerts.find((a) => a.kind === "employee-no-slots");
+  assert.equal(alert?.count, 1);
+  assert.equal(alert?.label, "1 colaborador sem horários abertos nos próximos 7 dias");
+});
+
+test("alerta lista serviços sem profissional vinculado", () => {
+  const alerts = buildAlerts(
+    [],
+    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] }],
+    [{ id: 1, name: "Corte" }, { id: 2, name: "Barba" }],
+    7,
+  );
+
+  const alert = alerts.find((a) => a.kind === "service-no-employee");
+  assert.equal(alert?.count, 1);
+  assert.equal(alert?.label, "1 serviço sem profissional vinculado");
+});
+
+test("alerta conta dias sem nenhum horário livre", () => {
+  const alerts = buildAlerts(
+    [
+      slot({ id: 1, isBooked: true, date: from }),
+      slot({ id: 2, isBooked: true, date: from }),
+      slot({ id: 3, date: new Date("2026-07-26T00:00:00.000Z") }),
+    ],
+    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [] }],
+    [],
+    7,
+  );
+
+  const alert = alerts.find((a) => a.kind === "day-fully-booked");
+  assert.equal(alert?.count, 1);
+  assert.equal(alert?.label, "1 dia sem nenhum horário livre");
+});
+
+test("alerta conta convites pendentes", () => {
+  const alerts = buildAlerts(
+    [],
+    [{ id: 1, name: "Ana", pendingInvite: true, serviceIds: [] }],
+    [],
+    7,
+  );
+
+  const alert = alerts.find((a) => a.kind === "pending-invite");
+  assert.equal(alert?.count, 1);
+  assert.equal(alert?.label, "1 convite pendente");
+});
+
+test("negócio saudável não gera alerta nenhum", () => {
+  const alerts = buildAlerts(
+    [slot({ employeeId: 1 })],
+    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] }],
+    [{ id: 1, name: "Corte" }],
+    7,
+  );
+
+  assert.deepEqual(alerts, []);
 });
