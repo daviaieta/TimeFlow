@@ -6,20 +6,8 @@ import { Button } from "@/components/ui/button";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { PlaceholderOverview } from "@/components/dashboard/placeholder-overview";
-import { DashboardOverview, PeriodDays } from "@/lib/dashboard";
+import { DashboardOverview, PeriodDays, formatRangeLabel } from "@/lib/dashboard";
 import { useAuthUser } from "./auth-context";
-
-const rangeFormatter = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "short",
-  timeZone: "UTC",
-});
-
-function formatRangeLabel(from: string, to: string): string {
-  return `${rangeFormatter.format(new Date(`${from}T00:00:00.000Z`))} – ${rangeFormatter.format(
-    new Date(`${to}T00:00:00.000Z`),
-  )}`;
-}
 
 function Skeleton({ className }: { className?: string }) {
   return (
@@ -35,6 +23,15 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // `isPending` só liga quando o `startTransition` do efeito de montagem já
+  // rodou (pós-commit) — entre a primeira pintura e esse momento ele fica
+  // `false` mesmo sem nenhum dado carregado ainda. Gatear o seletor por
+  // `data === null` também fecha essa janela: ele começa desabilitado na
+  // primeira pintura e só libera quando existe algum dado para trocar de
+  // período em cima — mesmo que um primeiro load tenha falhado, o usuário
+  // ainda pode reagir pelo botão "Tentar de novo" (que só depende de
+  // `isPending`), sem o seletor liberar sem nunca ter havido dado.
+  const selectorDisabled = isPending || data === null;
 
   // Devolve uma promise que nunca rejeita: erros de rede viram estado local,
   // para que `await load(...)` dentro da transition sempre resolva e o
@@ -55,8 +52,8 @@ export default function DashboardPage() {
 
   // O fetch roda dentro de uma transition (em vez de um setState síncrono no
   // corpo do efeito) para não disparar o lint `react-hooks/set-state-in-effect`
-  // e para que `isPending` sirva como único indicador de carregamento — tanto
-  // no efeito de troca de período quanto no retry manual do botão de erro.
+  // e para que `isPending` sirva como indicador de carregamento — tanto no
+  // efeito de troca de período quanto no retry manual do botão de erro.
   const runLoad = useCallback(
     (period: PeriodDays) => {
       startTransition(async () => {
@@ -93,7 +90,7 @@ export default function DashboardPage() {
             ) : null}
           </p>
         </div>
-        <PeriodSelector value={days} onChange={setDays} disabled={isPending} />
+        <PeriodSelector value={days} onChange={setDays} disabled={selectorDisabled} />
       </div>
 
       {error ? (

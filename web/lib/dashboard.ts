@@ -114,6 +114,23 @@ export function relativeDayLabel(dayKey: string, todayKey: string): string {
   return `${WEEKDAYS[date.getUTCDay()]}, ${day} ${MONTHS[date.getUTCMonth()]}`;
 }
 
+// O ano só aparece quando o intervalo cruza a virada de ano — dentro do
+// mesmo ano ele é ruído. Sem Intl de propósito: os testes não podem
+// depender do ICU da máquina que roda o teste.
+export function formatRangeLabel(from: string, to: string): string {
+  const fromDate = new Date(`${from}T00:00:00.000Z`);
+  const toDate = new Date(`${to}T00:00:00.000Z`);
+  const sameYear = fromDate.getUTCFullYear() === toDate.getUTCFullYear();
+
+  function formatPart(date: Date): string {
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const month = MONTHS[date.getUTCMonth()];
+    return sameYear ? `${day} ${month}` : `${day} ${month} ${date.getUTCFullYear()}`;
+  }
+
+  return `${formatPart(fromDate)} – ${formatPart(toDate)}`;
+}
+
 export function groupUpcomingByDay(
   rows: UpcomingBooking[],
 ): [string, UpcomingBooking[]][] {

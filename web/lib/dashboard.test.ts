@@ -4,6 +4,7 @@ import type { UpcomingBooking } from "./dashboard.ts";
 import {
   formatCurrency,
   formatPercent,
+  formatRangeLabel,
   groupUpcomingByDay,
   heatIntensity,
   paceDelta,
@@ -76,4 +77,19 @@ test("delta do ritmo compara os dois períodos", () => {
 test("período anterior zerado não vira divisão por zero", () => {
   assert.deepEqual(paceDelta(5, 0), { direction: "up", percent: null });
   assert.deepEqual(paceDelta(0, 0), { direction: "flat", percent: null });
+});
+
+test("intervalo de datas dentro do mesmo mês omite o ano", () => {
+  assert.equal(formatRangeLabel("2026-07-24", "2026-07-25"), "24 jul – 25 jul");
+});
+
+test("intervalo de datas cruzando o mês mantém o mesmo ano omitido", () => {
+  assert.equal(formatRangeLabel("2026-06-28", "2026-07-05"), "28 jun – 05 jul");
+});
+
+test("intervalo de datas cruzando o ano mostra o ano nas duas pontas", () => {
+  assert.equal(
+    formatRangeLabel("2026-12-28", "2027-01-05"),
+    "28 dez 2026 – 05 jan 2027",
+  );
 });
