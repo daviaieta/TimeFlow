@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
 import { Button } from "@/components/ui/button";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
+import { OccupancyChart } from "@/components/dashboard/occupancy-chart";
+import { OccupancyHeatmap } from "@/components/dashboard/occupancy-heatmap";
+import { Panel } from "@/components/dashboard/panel";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { PlaceholderOverview } from "@/components/dashboard/placeholder-overview";
 import { DashboardOverview, PeriodDays, formatRangeLabel } from "@/lib/dashboard";
@@ -124,6 +127,25 @@ export default function DashboardPage() {
           className={`mt-8 transition-opacity ${isPending ? "opacity-50" : ""}`}
         >
           <KpiCards kpis={data.kpis} days={data.range.days} />
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-12">
+            <Panel
+              title="Ocupação"
+              description={data.range.days === 7 ? "Dia a dia" : "Por semana"}
+              className="lg:col-span-8"
+            >
+              <OccupancyChart buckets={data.occupancyByBucket} />
+            </Panel>
+          </div>
+
+          <div className="mt-4 grid gap-4">
+            <Panel
+              title="Mapa de demanda"
+              description="Quando sua agenda enche, por dia da semana e hora"
+            >
+              <OccupancyHeatmap cells={data.heatmap} />
+            </Panel>
+          </div>
         </div>
       ) : null}
     </div>
