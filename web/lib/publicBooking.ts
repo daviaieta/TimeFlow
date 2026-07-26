@@ -48,6 +48,10 @@ const MONTHS = [
   "jan", "fev", "mar", "abr", "mai", "jun",
   "jul", "ago", "set", "out", "nov", "dez",
 ];
+const MONTHS_LONG = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
 
 export function groupSlotsByDay(slots: PublicSlot[]): [string, PublicSlot[]][] {
   const groups = new Map<string, PublicSlot[]>();
@@ -95,6 +99,62 @@ export function earliestNextSlot(employees: PublicEmployee[]): NextSlot | null {
   }
 
   return earliest;
+}
+
+export interface DayParts {
+  weekday: string;
+  day: string;
+  month: string;
+  year: string;
+  isToday: boolean;
+}
+
+// O seletor de dia monta cada peça no seu próprio tamanho tipográfico, então
+// a data chega separada em vez de já formatada.
+export function dayParts(dayKey: string, todayKey: string): DayParts {
+  const date = new Date(`${dayKey}T00:00:00`);
+
+  return {
+    weekday: WEEKDAYS[date.getDay()],
+    day: String(date.getDate()),
+    month: MONTHS_LONG[date.getMonth()],
+    year: String(date.getFullYear()),
+    isToday: dayKey === todayKey,
+  };
+}
+
+// O horário na grade é só o começo: quem dita o fim é a duração do serviço.
+export function serviceWindow(startTime: string, durationMinutes: number): string {
+  const [hours, minutes] = startTime.split(":").map(Number);
+  const end = hours * 60 + minutes + durationMinutes;
+  const endHours = String(Math.floor(end / 60)).padStart(2, "0");
+  const endMinutes = String(end % 60).padStart(2, "0");
+
+  return `${startTime} – ${endHours}:${endMinutes}`;
+}
+
+export interface SlotPeriod {
+  label: string;
+  slots: PublicSlot[];
+}
+
+// Uma lista corrida de 30 horários é difícil de varrer. Manhã/tarde/noite é
+// como o cliente já pensa a própria agenda.
+const PERIODS = [
+  { label: "Manhã", untilHour: 12 },
+  { label: "Tarde", untilHour: 18 },
+  { label: "Noite", untilHour: 24 },
+];
+
+export function groupSlotsByPeriod(slots: PublicSlot[]): SlotPeriod[] {
+  return PERIODS.map((period, index) => ({
+    label: period.label,
+    slots: slots.filter((slot) => {
+      const hour = Number(slot.startTime.slice(0, 2));
+      const from = index === 0 ? 0 : PERIODS[index - 1].untilHour;
+      return hour >= from && hour < period.untilHour;
+    }),
+  })).filter((period) => period.slots.length > 0);
 }
 
 export function isValidPhone(value: string): boolean {

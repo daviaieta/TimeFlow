@@ -2,17 +2,67 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   dayChipLabel,
+  dayParts,
   earliestNextSlot,
   formatPrice,
   groupSlotsByDay,
+  groupSlotsByPeriod,
   isValidPhone,
   nextSlotLabel,
+  serviceWindow,
   type PublicSlot,
 } from "./publicBooking.ts";
 
 function slot(id: number, date: string, startTime = "09:00"): PublicSlot {
   return { id, date, startTime, endTime: "10:00" };
 }
+
+test("partes da data alimentam o seletor de dia", () => {
+  assert.deepEqual(dayParts("2026-07-27", "2026-07-25"), {
+    weekday: "seg",
+    day: "27",
+    month: "julho",
+    year: "2026",
+    isToday: false,
+  });
+});
+
+test("o dia de hoje se identifica no seletor", () => {
+  assert.equal(dayParts("2026-07-25", "2026-07-25").isToday, true);
+});
+
+// O cliente escolhe um começo; o fim quem dita é a duração do serviço.
+test("janela do atendimento vai do início até o fim do serviço", () => {
+  assert.equal(serviceWindow("14:00", 60), "14:00 – 15:00");
+  assert.equal(serviceWindow("09:45", 30), "09:45 – 10:15");
+});
+
+test("horários se separam por período do dia", () => {
+  const periods = groupSlotsByPeriod([
+    slot(1, "2026-07-27T00:00:00.000Z", "09:00"),
+    slot(2, "2026-07-27T00:00:00.000Z", "11:30"),
+    slot(3, "2026-07-27T00:00:00.000Z", "14:00"),
+    slot(4, "2026-07-27T00:00:00.000Z", "19:00"),
+  ]);
+
+  assert.deepEqual(
+    periods.map((period) => [period.label, period.slots.length]),
+    [
+      ["Manhã", 2],
+      ["Tarde", 1],
+      ["Noite", 1],
+    ],
+  );
+});
+
+test("período sem nenhum horário não vira seção vazia", () => {
+  const periods = groupSlotsByPeriod([slot(1, "2026-07-27T00:00:00.000Z", "14:00")]);
+
+  assert.deepEqual(
+    periods.map((period) => period.label),
+    ["Tarde"],
+  );
+});
 
 test("agrupa slots por dia preservando a ordem", () => {
   const groups = groupSlotsByDay([
