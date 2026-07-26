@@ -38,22 +38,15 @@ export function groupByDate(items: Availability[]): [string, Availability[]][] {
   return [...groups.entries()];
 }
 
-export function partitionByDay(
-  items: Availability[],
-  todayKey: string,
-): { upcoming: Availability[]; past: Availability[] } {
-  const upcoming: Availability[] = [];
-  const past: Availability[] = [];
-
-  for (const item of items) {
-    if (item.date.slice(0, 10) >= todayKey) {
-      upcoming.push(item);
-    } else {
-      past.push(item);
-    }
-  }
-
-  return { upcoming, past };
+// upcoming: os dias já chegam do servidor na ordem certa (mais próximo primeiro).
+// past: o servidor devolve os horários sempre crescentes por dia; só a ORDEM DOS
+// DIAS precisa inverter aqui (mais recente primeiro), nunca os horários dentro
+// de um dia.
+export function orderDayGroups(
+  groups: [string, Availability[]][],
+  tab: "upcoming" | "past",
+): [string, Availability[]][] {
+  return tab === "past" ? [...groups].reverse() : groups;
 }
 
 export function summarizeDay(slots: Availability[]): {
