@@ -1,6 +1,14 @@
 import { prisma } from "../lib/prisma";
 import { AvailabilityData } from "../services/availabilityRules";
 
+export type ScheduleDirection = "upcoming" | "past";
+
+// Não exportado: não é regra de negócio, é só "de que lado de hoje" vira
+// filtro do Prisma. countDates e findDatesPage compartilham a mesma escolha.
+function sideOfToday(direction: ScheduleDirection, todayStart: Date) {
+  return direction === "upcoming" ? { gte: todayStart } : { lt: todayStart };
+}
+
 // O booking é o que distingue reserva de cliente externo (intocável) de
 // encaixe manual (editável pelo dono).
 const withBooking = { booking: { select: { id: true, clientName: true } } };
@@ -9,6 +17,43 @@ export const availabilityRepository = {
   findManyByEmployee(employeeId: number) {
     return prisma.availability.findMany({
       where: { employeeId },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      include: withBooking,
+    });
+  },
+
+  countDates(employeeId: number, direction: ScheduleDirection, todayStart: Date) {
+    return prisma.availability
+      .groupBy({
+        by: ["date"],
+        where: { employeeId, date: sideOfToday(direction, todayStart) },
+      })
+      .then((rows) => rows.length);
+  },
+
+  findDatesPage(
+    employeeId: number,
+    direction: ScheduleDirection,
+    todayStart: Date,
+    skip: number,
+    take: number,
+  ) {
+    return prisma.availability.findMany({
+      where: { employeeId, date: sideOfToday(direction, todayStart) },
+      distinct: ["date"],
+      orderBy: { date: direction === "upcoming" ? "asc" : "desc" },
+      skip,
+      take,
+      select: { date: true },
+    });
+  },
+
+  // Sempre crescente, nos dois modos: quem decide se os DIAS aparecem em
+  // ordem inversa (aba Passados) é o front, na exibição — os horários DENTRO
+  // de cada dia continuam crescentes nos dois casos.
+  findManyByEmployeeForDates(employeeId: number, dates: Date[]) {
+    return prisma.availability.findMany({
+      where: { employeeId, date: { in: dates } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
       include: withBooking,
     });
