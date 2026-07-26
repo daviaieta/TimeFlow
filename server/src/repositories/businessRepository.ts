@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 interface CreateWithAdminInput {
   name: string;
   slug: string;
+  address: string | null;
   admin: {
     name: string;
     email: string;
@@ -19,6 +20,15 @@ export const businessRepository = {
 
   findById(id: number) {
     return prisma.business.findUnique({ where: { id } });
+  },
+
+  // Sem relações: as contagens vêm de queries próprias, para não puxar uma
+  // linha de usuário por negócio.
+  findAll() {
+    return prisma.business.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, slug: true, createdAt: true },
+    });
   },
 
   // Catálogo público: serviços com os profissionais que os oferecem.
@@ -40,11 +50,21 @@ export const businessRepository = {
     });
   },
 
-  createWithAdmin({ name, slug, admin }: CreateWithAdminInput) {
+  update(id: number, data: { name: string; slug: string; address: string | null }) {
+    return prisma.business.update({
+      where: { id },
+      // Campos explícitos, nunca o objeto do request inteiro: é o que impede
+      // mass-assignment de colunas que o schema da rota não previu.
+      data: { name: data.name, slug: data.slug, address: data.address },
+    });
+  },
+
+  createWithAdmin({ name, slug, address, admin }: CreateWithAdminInput) {
     return prisma.business.create({
       data: {
         name,
         slug,
+        address,
         users: {
           create: {
             name: admin.name,

@@ -9,6 +9,7 @@ import { OccupancyHeatmap } from "@/components/dashboard/occupancy-heatmap";
 import { Panel } from "@/components/dashboard/panel";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { PlaceholderOverview } from "@/components/dashboard/placeholder-overview";
+import { PlatformOverview } from "@/components/dashboard/platform-overview";
 import { DashboardOverview, PeriodDays, formatRangeLabel } from "@/lib/dashboard";
 import { useAuthUser } from "./auth-context";
 
@@ -21,6 +22,7 @@ function Skeleton({ className }: { className?: string }) {
 export default function DashboardPage() {
   const user = useAuthUser();
   const isAdmin = user.role === "ADMIN";
+  const isSuperadmin = user.role === "SUPERADMIN";
 
   const [days, setDays] = useState<PeriodDays>(7);
   const [data, setData] = useState<DashboardOverview | null>(null);
@@ -70,6 +72,10 @@ export default function DashboardPage() {
     if (isAdmin) runLoad(days);
   }, [isAdmin, days, runLoad]);
 
+  // O SUPERADMIN não tem businessId, então nada do dashboard de ocupação se
+  // aplica a ele: vai para o painel da plataforma. PlaceholderOverview passa a
+  // atender só EMPLOYEE.
+  if (isSuperadmin) return <PlatformOverview />;
   if (!isAdmin) return <PlaceholderOverview user={user} />;
 
   const firstName = user.name.split(" ")[0];

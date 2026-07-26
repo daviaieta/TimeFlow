@@ -3,15 +3,30 @@
 import { createContext, useContext } from "react";
 import { AuthUser } from "@/lib/auth";
 
-const AuthUserContext = createContext<AuthUser | null>(null);
+interface AuthContextValue {
+  user: AuthUser;
+  refresh: () => Promise<void>;
+}
+
+const AuthUserContext = createContext<AuthContextValue | null>(null);
 
 export const AuthUserProvider = AuthUserContext.Provider;
 
-export function useAuthUser(): AuthUser {
-  const user = useContext(AuthUserContext);
-  if (!user) {
+function useAuthContext(): AuthContextValue {
+  const value = useContext(AuthUserContext);
+  if (!value) {
     throw new Error("useAuthUser must be used inside the dashboard layout");
   }
 
-  return user;
+  return value;
+}
+
+export function useAuthUser(): AuthUser {
+  return useAuthContext().user;
+}
+
+// Separado de useAuthUser para que as telas que só leem o usuário não precisem
+// saber que existe um refresh — nenhuma delas muda.
+export function useRefreshAuthUser(): () => Promise<void> {
+  return useAuthContext().refresh;
 }

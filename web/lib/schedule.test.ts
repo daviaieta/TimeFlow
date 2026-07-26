@@ -6,7 +6,7 @@ import {
   formatMinutes,
   groupByDate,
   localDayKey,
-  partitionByDay,
+  orderDayGroups,
   summarizeDay,
   toMinutes,
 } from "./schedule.ts";
@@ -55,23 +55,38 @@ test("agrupa por dia preservando a ordem", () => {
   );
 });
 
-test("separa futuros de passados incluindo hoje nos futuros", () => {
-  const { upcoming, past } = partitionByDay(
-    [
-      slot({ id: 1, date: "2026-07-24T00:00:00.000Z" }),
-      slot({ id: 2, date: "2026-07-25T00:00:00.000Z" }),
-      slot({ id: 3, date: "2026-07-26T00:00:00.000Z" }),
-    ],
-    "2026-07-25",
-  );
+test("orderDayGroups mantém a ordem recebida para próximos", () => {
+  const groups = groupByDate([
+    slot({ id: 1, date: "2026-07-25T00:00:00.000Z" }),
+    slot({ id: 2, date: "2026-07-26T00:00:00.000Z" }),
+  ]);
 
   assert.deepEqual(
-    upcoming.map((s) => s.id),
-    [2, 3],
+    orderDayGroups(groups, "upcoming").map(([day]) => day),
+    ["2026-07-25", "2026-07-26"],
+  );
+});
+
+// Bug corrigido nesta entrega: a versão antiga invertia a lista inteira antes
+// de agrupar, o que também invertia a ordem dos horários DENTRO de cada dia.
+// orderDayGroups só inverte a ordem dos GRUPOS — cada Availability[] interno
+// continua na ordem em que chegou (crescente).
+test("orderDayGroups para passados inverte os dias, não os horários de cada dia", () => {
+  const groups = groupByDate([
+    slot({ id: 1, date: "2026-07-24T00:00:00.000Z", startTime: "09:00" }),
+    slot({ id: 2, date: "2026-07-24T00:00:00.000Z", startTime: "11:00" }),
+    slot({ id: 3, date: "2026-07-25T00:00:00.000Z" }),
+  ]);
+
+  const ordered = orderDayGroups(groups, "past");
+
+  assert.deepEqual(
+    ordered.map(([day]) => day),
+    ["2026-07-25", "2026-07-24"],
   );
   assert.deepEqual(
-    past.map((s) => s.id),
-    [1],
+    ordered[1][1].map((s) => s.id),
+    [1, 2],
   );
 });
 

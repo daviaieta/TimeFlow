@@ -40,7 +40,13 @@ function formatFullDate(isoDate: string): string {
   });
 }
 
-export function BookingWizard({ slug }: { slug: string }) {
+interface BookingWizardProps {
+  slug: string;
+  /** Vem da vitrine: o cliente já escolheu o serviço e pula o passo 1. */
+  initialServiceId?: number;
+}
+
+export function BookingWizard({ slug, initialServiceId }: BookingWizardProps) {
   const [catalog, setCatalog] = useState<PublicBusiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
@@ -64,23 +70,6 @@ export function BookingWizard({ slug }: { slug: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<BookingSummary | null>(null);
 
-  const loadCatalog = useCallback(() => {
-    return fetchAdapter<PublicBusiness>({
-      method: "GET",
-      path: `/public/businesses/${slug}`,
-    })
-      .then(({ data }) => setCatalog(data))
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 404) setMissing(true);
-        else setLoadError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [slug]);
-
-  useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog]);
-
   // O serviço vai junto porque a lista depende da duração dele: um horário só
   // aparece se o atendimento couber inteiro a partir dali.
   const loadSlots = useCallback(
@@ -101,6 +90,56 @@ export function BookingWizard({ slug }: { slug: string }) {
     },
     [slug],
   );
+
+  // Serviço com um único profissional pula a etapa "com quem?" — não existe
+  // escolha a fazer ali. Vale para quem clicou "Continuar" no passo 1 e para
+  // quem chegou da vitrine com o serviço já escolhido.
+  const advanceFromService = useCallback(
+    (chosen: PublicService) => {
+      setSlotsError(null);
+
+      if (chosen.employees.length === 1) {
+        setEmployee(chosen.employees[0]);
+        setEmployeeSkipped(true);
+        setStep("slot");
+        loadSlots(chosen.employees[0].id, chosen.id);
+      } else {
+        setEmployeeSkipped(false);
+        setStep("employee");
+      }
+    },
+    [loadSlots],
+  );
+
+  const loadCatalog = useCallback(() => {
+    return fetchAdapter<PublicBusiness>({
+      method: "GET",
+      path: `/public/businesses/${slug}`,
+    })
+      .then(({ data }) => {
+        setCatalog(data);
+
+        // A vitrine deep-linka com ?servico=<id>. O passo 1 só é pulado se o
+        // id corresponder a um serviço real deste negócio — link velho ou
+        // adulterado cai no fluxo normal em vez de quebrar.
+        const requested = data.services.find(
+          (item) => item.id === initialServiceId,
+        );
+        if (requested) {
+          setService(requested);
+          advanceFromService(requested);
+        }
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 404) setMissing(true);
+        else setLoadError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [slug, initialServiceId, advanceFromService]);
+
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
 
   if (missing) notFound();
 
@@ -149,21 +188,9 @@ export function BookingWizard({ slug }: { slug: string }) {
     setService(next);
   }
 
-  // Serviço com um único profissional pula a etapa "com quem?" — não existe
-  // escolha a fazer ali.
   function continueFromService() {
     if (!service) return;
-    setSlotsError(null);
-
-    if (service.employees.length === 1) {
-      setEmployee(service.employees[0]);
-      setEmployeeSkipped(true);
-      setStep("slot");
-      loadSlots(service.employees[0].id, service.id);
-    } else {
-      setEmployeeSkipped(false);
-      setStep("employee");
-    }
+    advanceFromService(service);
   }
 
   function continueFromEmployee() {

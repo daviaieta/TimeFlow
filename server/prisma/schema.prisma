@@ -20,6 +20,9 @@ model Business {
   id        Int      @id @default(autoincrement())
   name      String
   slug      String   @unique
+  // Nullable de propósito: todo negócio já cadastrado nasce sem endereço, e
+  // nem todo negócio tem ponto físico.
+  address   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

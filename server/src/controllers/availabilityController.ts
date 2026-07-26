@@ -23,12 +23,25 @@ export interface GenerateAvailabilitiesBody {
   slotMinutes: number;
 }
 
+export interface ListAvailabilitiesQuery {
+  tab?: "upcoming" | "past";
+  page?: number;
+}
+
 export async function listAvailabilities(
-  request: FastifyRequest,
+  request: FastifyRequest<{ Querystring: ListAvailabilitiesQuery }>,
   reply: FastifyReply,
 ): Promise<void> {
-  const availabilities = await availabilityService.listAvailabilities(request.user.sub);
-  reply.send({ availabilities });
+  const tab = request.query.tab === "past" ? "past" : "upcoming";
+  const page = request.query.page ?? 1;
+
+  const result = await availabilityService.listAvailabilities(
+    request.user.sub,
+    { tab, page },
+    new Date(),
+  );
+
+  reply.send(result);
 }
 
 export async function createAvailability(

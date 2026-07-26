@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export function ServicePicker({
   onSelect,
   onContinue,
 }: ServicePickerProps) {
+  const router = useRouter();
   const services = catalog.services;
   const selectedNext = selected ? earliestNextSlot(selected.employees) : null;
 
@@ -53,6 +55,9 @@ export function ServicePicker({
       subtitle="Agende em menos de um minuto, sem criar conta."
       businessName={businessName}
       initials={businessInitials(catalog.business.name)}
+      // O passo 1 não volta para um passo anterior do assistente — ele sai
+      // do assistente e retorna à vitrine de onde o cliente veio.
+      onBack={() => router.push(`/${catalog.business.slug}`)}
       action={action}
       summary={
         selected ? (

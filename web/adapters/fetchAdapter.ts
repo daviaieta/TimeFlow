@@ -19,6 +19,8 @@ interface FetchAdapterInput {
   path: string;
   body?: Record<string, unknown>;
   headers?: Record<string, string>;
+  /** Server components precisam declarar: sem isto o Next resolve no build. */
+  cache?: RequestCache;
 }
 
 interface FetchAdapterResponse<T> {
@@ -32,11 +34,13 @@ export const fetchAdapter = async <T = unknown>({
   path,
   body,
   headers,
+  cache,
 }: FetchAdapterInput): Promise<FetchAdapterResponse<T>> => {
   const token = typeof window === "undefined" ? null : getToken();
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
+    cache,
     headers: {
       // Só declara JSON quando há body: num DELETE sem body o Fastify recusa
       // a requisição com "Body cannot be empty when content-type is set".

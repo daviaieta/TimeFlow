@@ -19,7 +19,7 @@ export interface PublicService {
 }
 
 export interface PublicBusiness {
-  business: { name: string; slug: string };
+  business: { name: string; slug: string; address: string | null };
   professionals: PublicEmployee[];
   services: PublicService[];
 }
