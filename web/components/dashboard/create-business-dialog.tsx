@@ -43,6 +43,7 @@ export function CreateBusinessDialog({
   const [slug, setSlug] = useState("");
   // Enquanto o dono não editar o slug à mão, ele acompanha o nome.
   const [slugTouched, setSlugTouched] = useState(false);
+  const [address, setAddress] = useState("");
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export function CreateBusinessDialog({
     setName("");
     setSlug("");
     setSlugTouched(false);
+    setAddress("");
     setAdminName("");
     setAdminEmail("");
     setError(null);
@@ -101,7 +103,12 @@ export function CreateBusinessDialog({
       await fetchAdapter({
         method: "POST",
         path: "/businesses",
-        body: { name, slug, admin: { name: adminName, email: adminEmail } },
+        body: {
+          name,
+          slug,
+          address: address.trim() === "" ? null : address.trim(),
+          admin: { name: adminName, email: adminEmail },
+        },
       });
       reset();
       onOpenChange(false);
@@ -151,6 +158,19 @@ export function CreateBusinessDialog({
               />
               <p className="text-xs text-muted-foreground">
                 Os clientes vão acessar em /{slug || "barbearia-do-ze"}
+              </p>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="business-address">Endereço</FieldLabel>
+              <Input
+                id="business-address"
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                placeholder="Rua das Flores, 123 — Centro"
+              />
+              <p className="text-xs text-muted-foreground">
+                Opcional. Pode ser preenchido depois nas configurações.
               </p>
             </Field>
 

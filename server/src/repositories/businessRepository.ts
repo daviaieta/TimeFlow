@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 interface CreateWithAdminInput {
   name: string;
   slug: string;
+  address: string | null;
   admin: {
     name: string;
     email: string;
@@ -58,11 +59,12 @@ export const businessRepository = {
     });
   },
 
-  createWithAdmin({ name, slug, admin }: CreateWithAdminInput) {
+  createWithAdmin({ name, slug, address, admin }: CreateWithAdminInput) {
     return prisma.business.create({
       data: {
         name,
         slug,
+        address,
         users: {
           create: {
             name: admin.name,

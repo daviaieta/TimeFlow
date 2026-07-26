@@ -4,6 +4,7 @@ import { businessService } from "../services/businessService";
 export interface CreateBusinessBody {
   name: string;
   slug: string;
+  address?: string | null;
   admin: {
     name: string;
     email: string;

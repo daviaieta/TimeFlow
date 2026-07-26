@@ -22,6 +22,9 @@ const createBusinessSchema = {
     properties: {
       name: { type: "string", minLength: 1 },
       slug: { type: "string", minLength: 1, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      // Opcional na criação: nem todo negócio cadastrado pelo superadmin tem
+      // ponto físico definido ainda.
+      address: { type: ["string", "null"] },
       admin: {
         type: "object",
         required: ["name", "email"],

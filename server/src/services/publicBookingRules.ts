@@ -26,7 +26,7 @@ export interface PublicEmployeeDto {
 }
 
 export interface PublicBusinessDto {
-  business: { name: string; slug: string };
+  business: { name: string; slug: string; address: string | null };
   professionals: PublicEmployeeDto[];
   services: {
     id: number;
@@ -124,7 +124,7 @@ export function nextSlotPerEmployee(
 // Serviço sem profissional vinculado sai do catálogo: o cliente não pode
 // escolher um caminho sem horário possível.
 export function toPublicBusinessDto(
-  business: { name: string; slug: string },
+  business: { name: string; slug: string; address?: string | null },
   services: CatalogService[],
   freeSlots: EmployeeSlot[],
   now: Date,
@@ -155,7 +155,11 @@ export function toPublicBusinessDto(
   }
 
   return {
-    business: { name: business.name, slug: business.slug },
+    business: {
+      name: business.name,
+      slug: business.slug,
+      address: business.address ?? null,
+    },
     professionals: [...professionals.values()],
     // Cada serviço anuncia a próxima vaga em que ELE cabe: uma descoloração
     // de 1h não pode prometer um buraco de 30min entre dois compromissos.

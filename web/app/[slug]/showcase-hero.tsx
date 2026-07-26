@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight02Icon, Location03Icon } from "@hugeicons/core-free-icons";
 import { BusinessMark } from "@/components/business-mark";
 import { buttonVariants } from "@/components/ui/button";
 import { formatBusinessName } from "@/lib/businessName";
@@ -48,6 +48,13 @@ export function ShowcaseHero({ catalog, todayKey }: ShowcaseHeroProps) {
         <h1 className="mt-5 text-[30px] leading-[1.08] font-semibold tracking-[-0.025em] sm:text-[42px]">
           {name}
         </h1>
+
+        {catalog.business.address ? (
+          <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <HugeiconsIcon icon={Location03Icon} className="size-4 shrink-0" />
+            {catalog.business.address}
+          </p>
+        ) : null}
 
         {next ? (
           <div className="mt-7">

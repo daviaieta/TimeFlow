@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -9,13 +9,14 @@ import {
   DashboardSquare01Icon,
   Logout03Icon,
   Scissor01Icon,
+  Settings02Icon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { fetchAdapter } from "@/adapters/fetchAdapter";
 import { AuthUser, Role, clearToken, getToken } from "@/lib/auth";
-import { businessInitials, formatBusinessName } from "@/lib/businessName";
+import { formatBusinessName } from "@/lib/businessName";
 import { AuthUserProvider } from "./auth-context";
 
 const navItems: {
@@ -48,6 +49,12 @@ const navItems: {
     icon: Calendar03Icon,
     roles: ["EMPLOYEE"],
   },
+  {
+    label: "Configurações",
+    href: "/dashboard/settings",
+    icon: Settings02Icon,
+    roles: ["SUPERADMIN", "ADMIN", "EMPLOYEE"],
+  },
 ];
 
 const roleLabels: Record<AuthUser["role"], string> = {
@@ -63,14 +70,14 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
 
-  useEffect(() => {
+  const loadUser = useCallback(() => {
     const token = getToken();
     if (!token) {
       router.replace("/login");
-      return;
+      return Promise.resolve();
     }
 
-    fetchAdapter<{ user: AuthUser }>({ method: "GET", path: "/auth/me" })
+    return fetchAdapter<{ user: AuthUser }>({ method: "GET", path: "/auth/me" })
       .then(({ data }) => setUser(data.user))
       .catch(() => {
         clearToken();
@@ -78,12 +85,23 @@ export default function DashboardLayout({
       });
   }, [router]);
 
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
+
+  // O contexto precisa de identidade estável: recriar o objeto a cada render
+  // faria toda tela consumidora re-renderizar sem motivo.
+  const contextValue = useMemo(
+    () => (user ? { user, refresh: loadUser } : null),
+    [user, loadUser],
+  );
+
   function handleLogout() {
     clearToken();
     router.replace("/login");
   }
 
-  if (!user) {
+  if (!user || !contextValue) {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-background">
         <p className="text-sm text-muted-foreground">Carregando…</p>
@@ -92,7 +110,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <AuthUserProvider value={user}>
+    <AuthUserProvider value={contextValue}>
       <div className="flex flex-1 bg-zinc-50 dark:bg-background">
         <aside className="hidden w-60 shrink-0 flex-col border-r bg-card px-4 py-6 sm:flex">
           <Link href="/dashboard" className="flex items-center px-2">
@@ -141,7 +159,7 @@ export default function DashboardLayout({
                     {formatBusinessName(user.business.name)}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {roleLabels[user.role]}
+                    Painel do {roleLabels[user.role]}
                   </p>
                 </div>
               </div>

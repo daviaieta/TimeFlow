@@ -7,7 +7,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: Role;
-  business: { id: number; name: string; slug: string } | null;
+  business: { id: number; name: string; slug: string; address: string | null } | null;
 }
 
 export function getToken(): string | null {
