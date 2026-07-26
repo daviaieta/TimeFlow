@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildAvailabilityData,
+  clampPage,
   normalizeClientName,
   toAvailabilityDto,
+  totalPagesFor,
+  utcMidnight,
 } from "./availabilityRules";
 
 test("nome com espaços em volta é normalizado", () => {
@@ -109,4 +112,39 @@ test("encaixe manual não fica locked", () => {
   });
 
   assert.equal(dto.locked, false);
+});
+
+test("utcMidnight zera a hora e mantém o dia UTC", () => {
+  const result = utcMidnight(new Date("2026-07-25T23:47:12.000Z"));
+  assert.equal(result.toISOString(), "2026-07-25T00:00:00.000Z");
+});
+
+test("utcMidnight numa data já em meia-noite não muda", () => {
+  const result = utcMidnight(new Date("2026-07-25T00:00:00.000Z"));
+  assert.equal(result.toISOString(), "2026-07-25T00:00:00.000Z");
+});
+
+test("totalPagesFor divide exato", () => {
+  assert.equal(totalPagesFor(14, 7), 2);
+});
+
+test("totalPagesFor arredonda pra cima quando sobra resto", () => {
+  assert.equal(totalPagesFor(15, 7), 3);
+});
+
+test("totalPagesFor sem dia nenhum ainda devolve 1 página", () => {
+  assert.equal(totalPagesFor(0, 7), 1);
+});
+
+test("clampPage abaixo de 1 vira 1", () => {
+  assert.equal(clampPage(0, 3), 1);
+  assert.equal(clampPage(-5, 3), 1);
+});
+
+test("clampPage acima do total vira o total", () => {
+  assert.equal(clampPage(9, 3), 3);
+});
+
+test("clampPage dentro do range não muda", () => {
+  assert.equal(clampPage(2, 3), 2);
 });
