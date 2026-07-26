@@ -1,51 +1,18 @@
-import "dotenv/config";
-import fastifyCors from "@fastify/cors";
-import fastifyJwt from "@fastify/jwt";
-import { fastify } from "fastify";
-import { corsOptions } from "./config/cors";
+import { buildApp } from "./app";
 import { env } from "./config/env";
-import { errorHandler } from "./lib/errorHandler";
-import { availabilityRoutes } from "./routes/availabilityRoutes";
-import { authRoutes } from "./routes/authRoutes";
-import { businessRoutes } from "./routes/businessRoutes";
-import { dashboardRoutes } from "./routes/dashboardRoutes";
-import { employeeRoutes } from "./routes/employeeRoutes";
-import { publicRoutes } from "./routes/publicRoutes";
-import { serviceRoutes } from "./routes/serviceRoutes";
-import "./interfaces/auth";
 
-const app = fastify({
-  ajv: {
-    customOptions: {
-      removeAdditional: true,
-      coerceTypes: true,
-      allErrors: true,
-    },
-  },
-});
+async function start(): Promise<void> {
+  const app = buildApp();
 
-app.register(fastifyCors, corsOptions);
+  try {
+    await app.listen({ port: env.port, host: env.host });
+    console.log(`Server listening on ${env.host}:${env.port}`);
+  } catch (error) {
+    // Sem isto, uma falha de bind vira unhandled rejection e o processo
+    // continua de pé sem atender ninguém — o provedor marcaria como saudável.
+    app.log.error(error);
+    process.exit(1);
+  }
+}
 
-app.register(fastifyJwt, {
-  secret: env.jwtSecret,
-});
-
-app.setErrorHandler(errorHandler);
-
-app.get("/", async () => {
-  return { message: "Welcome to TIME FLOW" };
-});
-
-app.register(authRoutes);
-app.register(businessRoutes);
-app.register(dashboardRoutes);
-app.register(serviceRoutes);
-app.register(employeeRoutes);
-app.register(availabilityRoutes);
-app.register(publicRoutes);
-
-app.listen({
-  port: env.port,
-});
-
-console.log(`Server running: http://localhost:${env.port}`);
+start();
