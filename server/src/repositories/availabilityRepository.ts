@@ -14,14 +14,6 @@ function sideOfToday(direction: ScheduleDirection, todayStart: Date) {
 const withBooking = { booking: { select: { id: true, clientName: true } } };
 
 export const availabilityRepository = {
-  findManyByEmployee(employeeId: number) {
-    return prisma.availability.findMany({
-      where: { employeeId },
-      orderBy: [{ date: "asc" }, { startTime: "asc" }],
-      include: withBooking,
-    });
-  },
-
   countDates(employeeId: number, direction: ScheduleDirection, todayStart: Date) {
     return prisma.availability
       .groupBy({

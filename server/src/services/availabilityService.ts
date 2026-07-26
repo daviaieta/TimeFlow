@@ -1,11 +1,14 @@
 import { BadRequestError, ConflictError, NotFoundError } from "../lib/errors";
-import { availabilityRepository } from "../repositories/availabilityRepository";
+import { availabilityRepository, ScheduleDirection } from "../repositories/availabilityRepository";
 import { planAvailabilities } from "./availabilityGenerator";
 import {
   AvailabilityInput,
   AvailabilityRow,
   buildAvailabilityData,
+  clampPage,
   toAvailabilityDto,
+  totalPagesFor,
+  utcMidnight,
 } from "./availabilityRules";
 
 export interface GenerateInput {
@@ -50,9 +53,44 @@ function assertNotBooked(availability: AvailabilityRow, action: string): void {
 }
 
 export const availabilityService = {
-  async listAvailabilities(employeeId: number) {
-    const availabilities = await availabilityRepository.findManyByEmployee(employeeId);
-    return availabilities.map(toAvailabilityDto);
+  async listAvailabilities(
+    employeeId: number,
+    params: { tab: ScheduleDirection; page: number },
+    now: Date,
+  ) {
+    const PAGE_SIZE = 7;
+    const todayStart = utcMidnight(now);
+
+    const totalDays = await availabilityRepository.countDates(
+      employeeId,
+      params.tab,
+      todayStart,
+    );
+    const totalPages = totalPagesFor(totalDays, PAGE_SIZE);
+    const page = clampPage(params.page, totalPages);
+
+    const dateRows = await availabilityRepository.findDatesPage(
+      employeeId,
+      params.tab,
+      todayStart,
+      (page - 1) * PAGE_SIZE,
+      PAGE_SIZE,
+    );
+
+    // Sem dia nenhum na página (aba vazia, ou página pedida além do fim antes
+    // do clamp): pula a segunda query, não sobra data pra filtrar.
+    const availabilities = dateRows.length
+      ? await availabilityRepository.findManyByEmployeeForDates(
+          employeeId,
+          dateRows.map((row) => row.date),
+        )
+      : [];
+
+    return {
+      availabilities: availabilities.map(toAvailabilityDto),
+      page,
+      totalPages,
+    };
   },
 
   async createAvailability(employeeId: number, input: AvailabilityInput) {

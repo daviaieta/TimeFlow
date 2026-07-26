@@ -9,6 +9,7 @@ import {
   AvailabilityBody,
   AvailabilityParams,
   GenerateAvailabilitiesBody,
+  ListAvailabilitiesQuery,
 } from "../controllers/availabilityController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
@@ -54,6 +55,17 @@ const generateSchema = {
   },
 };
 
+const listAvailabilitiesSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      tab: { type: "string", enum: ["upcoming", "past"] },
+      page: { type: "integer", minimum: 1 },
+    },
+  },
+};
+
 const availabilityParamsSchema = {
   params: {
     type: "object",
@@ -74,9 +86,12 @@ export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
     createAvailability,
   );
 
-  app.get(
+  app.get<{ Querystring: ListAvailabilitiesQuery }>(
     "/availabilities",
-    { preHandler: [authenticate, authorize(Role.EMPLOYEE)] },
+    {
+      schema: listAvailabilitiesSchema,
+      preHandler: [authenticate, authorize(Role.EMPLOYEE)],
+    },
     listAvailabilities,
   );
 
