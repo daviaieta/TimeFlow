@@ -10,6 +10,7 @@ import { authRoutes } from "./routes/authRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
 import { dashboardRoutes } from "./routes/dashboardRoutes";
 import { employeeRoutes } from "./routes/employeeRoutes";
+import { healthRoutes } from "./routes/healthRoutes";
 import { publicRoutes } from "./routes/publicRoutes";
 import { serviceRoutes } from "./routes/serviceRoutes";
 import "./interfaces/auth";
@@ -35,6 +36,7 @@ export function buildApp(): FastifyInstance {
     return { message: "Welcome to TIME FLOW" };
   });
 
+  app.register(healthRoutes);
   app.register(authRoutes);
   app.register(businessRoutes);
   app.register(dashboardRoutes);
