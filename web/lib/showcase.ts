@@ -31,6 +31,17 @@ export function businessGradient(slug: string): BusinessGradient {
   };
 }
 
+// A vitrine deep-linka para o assistente com ?servico=<id>. Só um inteiro
+// positivo vira intenção de pular o passo 1 — link velho, adulterado ou
+// truncado precisa cair no fluxo normal em vez de quebrar a página.
+export function parseServiceParam(raw: string | null): number | undefined {
+  if (raw === null || raw.trim() === "") return undefined;
+
+  const parsed = Number(raw);
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 // A API entrega serviço → profissionais. A seção de equipe precisa do inverso,
 // e inverter aqui evita um request a mais só para montar a lista.
 export function servicesByEmployee(
