@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { BusinessTable } from "@/components/dashboard/business-table";
 import { CreateBusinessDialog } from "@/components/dashboard/create-business-dialog";
 import { PlatformTiles } from "@/components/dashboard/platform-tiles";
-import { PlatformOverview as PlatformOverviewData } from "@/lib/platform";
+import {
+  BusinessRow,
+  PlatformOverview as PlatformOverviewData,
+} from "@/lib/platform";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse rounded-2xl bg-muted ${className ?? ""}`} />;
@@ -19,6 +22,9 @@ export function PlatformOverview() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [createOpen, setCreateOpen] = useState(false);
+  const [resendingId, setResendingId] = useState<number | null>(null);
+  const [resentId, setResentId] = useState<number | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   // Devolve uma promise que nunca rejeita: erros de rede viram estado local,
   // para que `await load()` dentro da transition sempre resolva e o
@@ -35,6 +41,32 @@ export function PlatformOverview() {
       .catch((err) => {
         setError(err instanceof ApiError ? err.message : "Erro inesperado.");
       });
+  }, []);
+
+  // A lista não é recarregada no sucesso: o convite continua pendente (só o
+  // token mudou), então o único efeito visível é a confirmação no próprio botão.
+  const handleResend = useCallback(async (row: BusinessRow) => {
+    const invite = row.pendingInvites[0];
+    if (!invite) return;
+
+    setResendingId(row.id);
+    setResendError(null);
+    try {
+      await fetchAdapter({
+        method: "POST",
+        path: `/businesses/${row.id}/resend-invite`,
+        body: { userId: invite.id },
+      });
+      setResentId(row.id);
+    } catch (err) {
+      setResendError(
+        err instanceof ApiError
+          ? `Não foi possível reenviar o convite de ${row.name}.`
+          : "Erro inesperado.",
+      );
+    } finally {
+      setResendingId(null);
+    }
   }, []);
 
   // O fetch roda dentro de uma transition (em vez de um setState síncrono no
@@ -94,6 +126,12 @@ export function PlatformOverview() {
         <div className="mt-8">
           <PlatformTiles totals={data.totals} />
 
+          {resendError ? (
+            <p className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {resendError}
+            </p>
+          ) : null}
+
           <div className="mt-4">
             {data.businesses.length === 0 ? (
               <div className="rounded-2xl border border-dashed bg-card/50 p-8 text-center">
@@ -106,7 +144,12 @@ export function PlatformOverview() {
                 </Button>
               </div>
             ) : (
-              <BusinessTable businesses={data.businesses} />
+              <BusinessTable
+                businesses={data.businesses}
+                onResend={handleResend}
+                resendingId={resendingId}
+                resentId={resentId}
+              />
             )}
           </div>
         </div>

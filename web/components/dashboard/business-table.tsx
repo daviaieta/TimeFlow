@@ -1,4 +1,8 @@
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Mail01Icon } from "@hugeicons/core-free-icons";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -24,7 +28,44 @@ function StatusBadge({ row }: { row: BusinessRow }) {
   );
 }
 
-export function BusinessTable({ businesses }: { businesses: BusinessRow[] }) {
+function ResendButton({
+  row,
+  onResend,
+  resending,
+  resent,
+}: {
+  row: BusinessRow;
+  onResend: (row: BusinessRow) => void;
+  resending: boolean;
+  resent: boolean;
+}) {
+  // Nada a reenviar num negócio cujo admin já assumiu.
+  if (businessStatus(row) === "active") return null;
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={resending || resent}
+      onClick={() => onResend(row)}
+    >
+      {resending ? <Spinner /> : <HugeiconsIcon icon={Mail01Icon} data-icon="inline-start" />}
+      {resent ? "Convite enviado" : resending ? "Enviando…" : "Reenviar convite"}
+    </Button>
+  );
+}
+
+export function BusinessTable({
+  businesses,
+  onResend,
+  resendingId,
+  resentId,
+}: {
+  businesses: BusinessRow[];
+  onResend: (row: BusinessRow) => void;
+  resendingId: number | null;
+  resentId: number | null;
+}) {
   return (
     <>
       {/* Abaixo de sm a tabela viraria scroll horizontal; cada negócio vira card. */}
@@ -42,6 +83,14 @@ export function BusinessTable({ businesses }: { businesses: BusinessRow[] }) {
             <p className="mt-1 text-xs text-muted-foreground tabular-nums">
               Criado em {formatCreatedAt(row.createdAt)}
             </p>
+            <div className="mt-3 empty:mt-0">
+              <ResendButton
+                row={row}
+                onResend={onResend}
+                resending={resendingId === row.id}
+                resent={resentId === row.id}
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -54,6 +103,7 @@ export function BusinessTable({ businesses }: { businesses: BusinessRow[] }) {
               <TableHead>Equipe</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Criado em</TableHead>
+              <TableHead className="text-right">Ação</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -71,6 +121,14 @@ export function BusinessTable({ businesses }: { businesses: BusinessRow[] }) {
                 </TableCell>
                 <TableCell className="text-muted-foreground tabular-nums">
                   {formatCreatedAt(row.createdAt)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <ResendButton
+                    row={row}
+                    onResend={onResend}
+                    resending={resendingId === row.id}
+                    resent={resentId === row.id}
+                  />
                 </TableCell>
               </TableRow>
             ))}
