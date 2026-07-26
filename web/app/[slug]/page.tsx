@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchAdapter } from "@/adapters/fetchAdapter";
+import { Logo } from "@/components/logo";
 import { formatBusinessName } from "@/lib/businessName";
 import { type PublicBusiness } from "@/lib/publicBooking";
 import { ServicesSection } from "./services-section";
 import { ShowcaseHero } from "./showcase-hero";
+import { TeamSection } from "./team-section";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -67,6 +70,19 @@ export default async function BusinessShowcasePage({ params }: PageProps) {
     <div className="min-h-dvh bg-background">
       <ShowcaseHero catalog={catalog} todayKey={today} />
       <ServicesSection catalog={catalog} />
+      <TeamSection catalog={catalog} todayKey={today} />
+
+      <footer className="border-t">
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-5 py-8 sm:px-8">
+          <Link
+            href="/"
+            className="opacity-70 transition-opacity hover:opacity-100"
+          >
+            <Logo markClassName="size-6" />
+          </Link>
+          <p className="text-xs text-muted-foreground">Agendamento online</p>
+        </div>
+      </footer>
     </div>
   );
 }
