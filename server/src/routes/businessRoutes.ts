@@ -1,6 +1,10 @@
 import { Role } from "@prisma/client";
 import { FastifyInstance } from "fastify";
-import { createBusiness, CreateBusinessBody } from "../controllers/businessController";
+import {
+  createBusiness,
+  listBusinesses,
+  CreateBusinessBody,
+} from "../controllers/businessController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
 
@@ -26,6 +30,13 @@ const createBusinessSchema = {
 };
 
 export async function businessRoutes(app: FastifyInstance): Promise<void> {
+  // Sem schema: a rota não recebe params, body nem querystring.
+  app.get(
+    "/businesses",
+    { preHandler: [authenticate, authorize(Role.SUPERADMIN)] },
+    listBusinesses,
+  );
+
   app.post<{ Body: CreateBusinessBody }>(
     "/businesses",
     {

@@ -5,6 +5,11 @@ import { generateInviteToken } from "../lib/inviteToken";
 import { sendInviteEmail } from "../lib/inviteEmail";
 import { businessRepository } from "../repositories/businessRepository";
 import { userRepository } from "../repositories/userRepository";
+import {
+  PlatformOverview,
+  buildBusinessRows,
+  buildPlatformTotals,
+} from "./platformRules";
 
 interface CreateBusinessInput {
   name: string;
@@ -25,6 +30,18 @@ interface CreateBusinessResult {
 }
 
 export const businessService = {
+  async listBusinesses(): Promise<PlatformOverview> {
+    const [businesses, roleCounts, pendingInvites] = await Promise.all([
+      businessRepository.findAll(),
+      userRepository.countByBusinessAndRole(),
+      userRepository.findPendingInvites(),
+    ]);
+
+    const rows = buildBusinessRows(businesses, roleCounts, pendingInvites);
+
+    return { totals: buildPlatformTotals(rows), businesses: rows };
+  },
+
   async createBusiness(input: CreateBusinessInput): Promise<CreateBusinessResult> {
     const slugTaken = await businessRepository.findBySlug(input.slug);
     if (slugTaken) {

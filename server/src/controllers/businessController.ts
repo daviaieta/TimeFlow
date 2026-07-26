@@ -18,3 +18,10 @@ export async function createBusiness(
 
   reply.status(201).send(result);
 }
+
+export async function listBusinesses(
+  _request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  reply.send(await businessService.listBusinesses());
+}

@@ -21,6 +21,15 @@ export const businessRepository = {
     return prisma.business.findUnique({ where: { id } });
   },
 
+  // Sem relações: as contagens vêm de queries próprias, para não puxar uma
+  // linha de usuário por negócio.
+  findAll() {
+    return prisma.business.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, slug: true, createdAt: true },
+    });
+  },
+
   // Catálogo público: serviços com os profissionais que os oferecem.
   // password not-null = convite aceito; pendente não tem agenda.
   findBySlugWithCatalog(slug: string) {
