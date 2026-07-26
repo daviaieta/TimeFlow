@@ -41,7 +41,7 @@ import {
   formatMinutes,
   groupByDate,
   localDayKey,
-  partitionByDay,
+  orderDayGroups,
   summarizeDay,
   toMinutes,
 } from "@/lib/schedule";
@@ -64,6 +64,8 @@ export default function SchedulePage() {
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Availability | null>(null);
@@ -96,12 +98,21 @@ export default function SchedulePage() {
   const [deletingSubmitting, setDeletingSubmitting] = useState(false);
 
   const loadAvailabilities = useCallback(() => {
-    return fetchAdapter<{ availabilities: Availability[] }>({
+    return fetchAdapter<{
+      availabilities: Availability[];
+      page: number;
+      totalPages: number;
+    }>({
       method: "GET",
-      path: "/availabilities",
+      path: `/availabilities?tab=${tab}&page=${page}`,
     })
       .then(({ data }) => {
         setAvailabilities(data.availabilities);
+        // O servidor clampa a página fora do intervalo válido (ex.: excluiu o
+        // último horário da última página) — sincronizar em vez de confiar
+        // no que foi pedido evita a tela ficar presa numa página inexistente.
+        setPage(data.page);
+        setTotalPages(data.totalPages);
         setListError(null);
       })
       .catch((err) => {
@@ -110,7 +121,7 @@ export default function SchedulePage() {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [tab, page]);
 
   useEffect(() => {
     loadAvailabilities();
@@ -124,6 +135,11 @@ export default function SchedulePage() {
         </p>
       </div>
     );
+  }
+
+  function selectTab(next: "upcoming" | "past") {
+    setTab(next);
+    setPage(1);
   }
 
   function openCreate() {
@@ -242,10 +258,7 @@ export default function SchedulePage() {
   }
 
   const todayKey = localDayKey(new Date());
-  const { upcoming, past } = partitionByDay(availabilities, todayKey);
-  // Passados do mais recente para o mais antigo: quem abre o histórico quer o
-  // dia que acabou de passar, não o de meses atrás.
-  const visible = tab === "past" ? [...past].reverse() : upcoming;
+  const dayGroups = orderDayGroups(groupByDate(availabilities), tab);
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -273,32 +286,30 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      {!loading && !listError && past.length > 0 && (
-        <div className="mt-6 inline-flex rounded-lg border bg-card p-0.5 text-sm">
-          <button
-            type="button"
-            onClick={() => setTab("upcoming")}
-            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
-              tab === "upcoming"
-                ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Próximos
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("past")}
-            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
-              tab === "past"
-                ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Passados
-          </button>
-        </div>
-      )}
+      <div className="mt-6 inline-flex rounded-lg border bg-card p-0.5 text-sm">
+        <button
+          type="button"
+          onClick={() => selectTab("upcoming")}
+          className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+            tab === "upcoming"
+              ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Próximos
+        </button>
+        <button
+          type="button"
+          onClick={() => selectTab("past")}
+          className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+            tab === "past"
+              ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Passados
+        </button>
+      </div>
 
       <div className="mt-6 flex flex-col gap-5">
         {loading ? (
@@ -309,14 +320,14 @@ export default function SchedulePage() {
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-destructive">
             {listError}
           </p>
-        ) : visible.length === 0 ? (
+        ) : dayGroups.length === 0 ? (
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
             {tab === "past"
               ? "Nenhum horário passado."
               : "Nenhum horário à frente. Crie seus horários livres para que clientes possam reservar."}
           </p>
         ) : (
-          groupByDate(visible).map(([day, slots]) => {
+          dayGroups.map(([day, slots]) => {
             const resumo = summarizeDay(slots);
             const isToday = day === todayKey;
 
@@ -416,6 +427,30 @@ export default function SchedulePage() {
           })
         )}
       </div>
+
+      {!loading && !listError && totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-3 text-sm">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 1}
+            onClick={() => setPage((current) => current - 1)}
+          >
+            Anterior
+          </Button>
+          <span className="text-muted-foreground">
+            Página {page} de {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === totalPages}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Próxima
+          </Button>
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
