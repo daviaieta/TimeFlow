@@ -25,3 +25,20 @@ export async function listBusinesses(
 ): Promise<void> {
   reply.send(await businessService.listBusinesses());
 }
+
+export interface ResendInviteParams {
+  id: number;
+}
+
+export interface ResendInviteBody {
+  userId: number;
+}
+
+export async function resendInvite(
+  request: FastifyRequest<{ Params: ResendInviteParams; Body: ResendInviteBody }>,
+  reply: FastifyReply,
+): Promise<void> {
+  await businessService.resendInvite(request.params.id, request.body.userId);
+
+  reply.status(204).send();
+}

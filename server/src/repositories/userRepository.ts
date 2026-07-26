@@ -22,6 +22,17 @@ export const userRepository = {
     return prisma.user.findUnique({ where: { inviteToken } });
   },
 
+  findById(id: number) {
+    return prisma.user.findUnique({ where: { id } });
+  },
+
+  resetInviteToken(id: number, inviteToken: string, inviteTokenExpiresAt: Date) {
+    return prisma.user.update({
+      where: { id },
+      data: { inviteToken, inviteTokenExpiresAt },
+    });
+  },
+
   acceptInvite(id: number, hashedPassword: string) {
     return prisma.user.update({
       where: { id },
