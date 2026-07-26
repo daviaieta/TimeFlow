@@ -35,9 +35,9 @@ export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export function slugify(name: string): string {
   return name
     .normalize("NFD")
-    // Tira os diacríticos que o NFD separou: "Zé" → "Ze". Usa os caracteres
-    // combinantes literais em vez de escapes unicode, que são invisíveis.
-    .replace(/[̀-ͯ]/g, "")
+    // Tira os diacríticos que o NFD separou: "Zé" → "Ze". Escapes unicode em
+    // vez dos caracteres combinantes literais, que são invisíveis no editor.
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
