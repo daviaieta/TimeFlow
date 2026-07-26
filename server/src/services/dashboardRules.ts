@@ -17,10 +17,28 @@ export interface SlotRow {
   clientName: string | null;
   employeeId: number;
   booking: {
+    id: number;
     clientName: string;
     clientPhone: string;
     service: { id: number; name: string; price: PriceLike };
   } | null;
+}
+
+// Um serviço mais longo que a grade ocupa vários slots com o MESMO booking.
+// Tudo que se conta "por reserva" — receita, nº de reservas, ranking — passa
+// por aqui. Ocupação é a exceção: ela conta slots, porque é tempo tomado.
+function distinctBookings<B extends { id: number }>(
+  slots: { booking: B | null }[],
+): B[] {
+  const seen = new Map<number, B>();
+
+  for (const slot of slots) {
+    if (slot.booking && !seen.has(slot.booking.id)) {
+      seen.set(slot.booking.id, slot.booking);
+    }
+  }
+
+  return [...seen.values()];
 }
 
 export interface EmployeeRow {
@@ -60,10 +78,12 @@ export function buildKpis(
 ): DashboardKpis {
   const total = slots.length;
   const bookedSlots = slots.filter((slot) => slot.isBooked);
-  const online = bookedSlots.filter((slot) => slot.booking !== null);
+  const online = distinctBookings(bookedSlots);
+  // Encaixe manual não tem booking, então cada slot anotado é um atendimento.
+  const manual = bookedSlots.filter((slot) => slot.booking === null).length;
 
   const revenueCents = online.reduce(
-    (sum, slot) => sum + toCents(slot.booking!.service.price),
+    (sum, booking) => sum + toCents(booking.service.price),
     0,
   );
 
@@ -74,9 +94,9 @@ export function buildKpis(
       total,
     },
     bookings: {
-      total: bookedSlots.length,
+      total: online.length + manual,
       online: online.length,
-      manual: bookedSlots.length - online.length,
+      manual,
     },
     revenue: {
       scheduled: formatCents(revenueCents),
@@ -220,8 +240,8 @@ export function rankTeam(slots: SlotRow[], employees: EmployeeRow[]): TeamRow[] 
   const rows = employees.map<TeamRow>((employee) => {
     const own = slots.filter((slot) => slot.employeeId === employee.id);
     const booked = own.filter((slot) => slot.isBooked);
-    const revenueCents = booked.reduce(
-      (sum, slot) => sum + (slot.booking ? toCents(slot.booking.service.price) : 0),
+    const revenueCents = distinctBookings(booked).reduce(
+      (sum, booking) => sum + toCents(booking.service.price),
       0,
     );
 
@@ -252,10 +272,8 @@ export function rankTeam(slots: SlotRow[], employees: EmployeeRow[]): TeamRow[] 
 export function rankServices(slots: SlotRow[]): ServiceRankRow[] {
   const totals = new Map<number, { name: string; bookings: number; cents: number }>();
 
-  for (const slot of slots) {
-    if (!slot.booking) continue;
-
-    const { id, name, price } = slot.booking.service;
+  for (const booking of distinctBookings(slots)) {
+    const { id, name, price } = booking.service;
     const entry = totals.get(id) ?? { name, bookings: 0, cents: 0 };
     entry.bookings += 1;
     entry.cents += toCents(price);
@@ -290,6 +308,7 @@ export interface UpcomingSlotRow {
   clientName: string | null;
   employee: { name: string };
   booking: {
+    id: number;
     clientName: string;
     clientPhone: string;
     service: { name: string };
@@ -323,18 +342,43 @@ function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many;
 }
 
+// Uma reserva longa chega aqui como vários slots consecutivos. O dono quer
+// ver o compromisso, não a grade: a linha nasce no primeiro slot e se estica
+// até o fim do último. Encaixe manual não tem booking e nunca agrupa.
+function mergeSlotsOfSameBooking(rows: UpcomingSlotRow[]): UpcomingSlotRow[] {
+  const merged: UpcomingSlotRow[] = [];
+  const position = new Map<number, number>();
+
+  for (const row of rows) {
+    const seen = row.booking ? position.get(row.booking.id) : undefined;
+
+    if (seen !== undefined) {
+      const target = merged[seen];
+      if (row.endTime > target.endTime) target.endTime = row.endTime;
+      continue;
+    }
+
+    if (row.booking) position.set(row.booking.id, merged.length);
+    merged.push({ ...row });
+  }
+
+  return merged;
+}
+
 export function buildUpcoming(
   rows: UpcomingSlotRow[],
   now: Date,
   limit: number,
 ): UpcomingRow[] {
-  return rows
+  const upcoming = rows
     .filter((row) => isSlotUpcoming(row, now))
     .sort(
       (a, b) =>
         a.date.getTime() - b.date.getTime() ||
         a.startTime.localeCompare(b.startTime),
-    )
+    );
+
+  return mergeSlotsOfSameBooking(upcoming)
     .slice(0, limit)
     .map((row) => ({
       availabilityId: row.id,

@@ -17,16 +17,34 @@ function slot(overrides: Partial<SlotRow> = {}): SlotRow {
   };
 }
 
+// Por padrão cada slot carrega uma reserva distinta (id colado no id do slot).
+// Slots da MESMA reserva — serviço longo — declaram booking.id igual à mão.
 function booked(price: string, overrides: Partial<SlotRow> = {}): SlotRow {
   return slot({
     isBooked: true,
     booking: {
+      id: overrides.id ?? 1,
       clientName: "Cliente",
       clientPhone: "11999999999",
       service: { id: 1, name: "Corte", price },
     },
     ...overrides,
   });
+}
+
+// Uma descoloração de 1h numa grade de 30min: dois slots, uma reserva.
+function longBooking(price: string, serviceId = 1): SlotRow[] {
+  const booking = {
+    id: 77,
+    clientName: "Rafael",
+    clientPhone: "11999999999",
+    service: { id: serviceId, name: "Descoloração", price },
+  };
+
+  return [
+    slot({ id: 1, startTime: "14:00", endTime: "14:30", isBooked: true, booking }),
+    slot({ id: 2, startTime: "14:30", endTime: "15:00", isBooked: true, booking }),
+  ];
 }
 
 function upcomingRow(overrides: Partial<UpcomingSlotRow> = {}): UpcomingSlotRow {
@@ -38,6 +56,7 @@ function upcomingRow(overrides: Partial<UpcomingSlotRow> = {}): UpcomingSlotRow 
     clientName: null,
     employee: { name: "Ana" },
     booking: {
+      id: overrides.id ?? 1,
       clientName: "Marcos",
       clientPhone: "11988887777",
       service: { name: "Corte" },
@@ -73,6 +92,29 @@ test("sem nenhum horário criado a ocupação é zero, não NaN", () => {
   assert.equal(kpis.occupancy.total, 0);
   assert.equal(kpis.revenue.scheduled, "0.00");
   assert.equal(kpis.revenue.averageTicket, "0.00");
+});
+
+// Contar por slot ocupado inflava tudo que é "por reserva" assim que um
+// serviço passava a ocupar mais de um horário da grade.
+test("serviço longo conta como uma reserva só", () => {
+  const kpis = buildKpis(longBooking("200.00"), { current: 0, previous: 0 });
+
+  assert.equal(kpis.bookings.total, 1);
+  assert.equal(kpis.bookings.online, 1);
+  assert.equal(kpis.revenue.scheduled, "200.00");
+  assert.equal(kpis.revenue.averageTicket, "200.00");
+});
+
+// Ocupação é a exceção: os dois slots estão de fato tomados na agenda.
+test("serviço longo ocupa os dois slots na taxa de ocupação", () => {
+  const kpis = buildKpis(
+    [...longBooking("200.00"), slot({ id: 3 }), slot({ id: 4 })],
+    { current: 0, previous: 0 },
+  );
+
+  assert.equal(kpis.occupancy.booked, 2);
+  assert.equal(kpis.occupancy.total, 4);
+  assert.equal(kpis.occupancy.rate, 0.5);
 });
 
 test("encaixe manual conta como ocupado mas não como reserva do site", () => {
@@ -230,10 +272,12 @@ test("ranking da equipe ordena por ocupação decrescente", () => {
 test("serviços rankeiam por receita e o share soma 1", () => {
   const corte = (id: number) =>
     booked("30.00", { id, booking: {
+      id,
       clientName: "C", clientPhone: "1",
       service: { id: 1, name: "Corte", price: "30.00" },
     } });
   const barba = booked("70.00", { id: 9, booking: {
+    id: 9,
     clientName: "C", clientPhone: "1",
     service: { id: 2, name: "Barba", price: "70.00" },
   } });
@@ -250,9 +294,27 @@ test("serviços rankeiam por receita e o share soma 1", () => {
   assert.equal(Math.round((rows[0].share + rows[1].share) * 100), 100);
 });
 
+test("serviço longo entra uma vez no ranking de serviços", () => {
+  const rows = rankServices(longBooking("200.00", 5));
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].bookings, 1);
+  assert.equal(rows[0].revenue, "200.00");
+});
+
+test("serviço longo não dobra a receita do colaborador", () => {
+  const rows = rankTeam(longBooking("200.00"), [
+    { id: 1, name: "Samuel", pendingInvite: false, serviceIds: [1] },
+  ]);
+
+  assert.equal(rows[0].revenue, "200.00");
+  assert.equal(rows[0].booked, 2); // ocupação segue por slot
+});
+
 test("serviços com receita zero têm share zero, não NaN", () => {
   const rows = rankServices([
     booked("0.00", { booking: {
+      id: 1,
       clientName: "C", clientPhone: "1",
       service: { id: 1, name: "Cortesia", price: "0.00" },
     } }),
@@ -280,6 +342,44 @@ test("próxima reserva expõe cliente, telefone, serviço e profissional", () =>
     serviceName: "Corte",
     employeeName: "Ana",
   });
+});
+
+// Sem agrupar, o dono via a mesma descoloração duas vezes na lista de
+// próximas reservas — uma por slot da grade.
+test("reserva longa aparece uma vez e vai até o fim do atendimento", () => {
+  const descoloracao = {
+    id: 77,
+    clientName: "Rafael",
+    clientPhone: "11988887777",
+    service: { name: "Descoloração" },
+  };
+
+  const rows = buildUpcoming(
+    [
+      upcomingRow({ id: 1, startTime: "14:00", endTime: "14:30", booking: descoloracao }),
+      upcomingRow({ id: 2, startTime: "14:30", endTime: "15:00", booking: descoloracao }),
+    ],
+    new Date("2026-07-25T10:00:00"),
+    8,
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].availabilityId, 1);
+  assert.equal(rows[0].startTime, "14:00");
+  assert.equal(rows[0].endTime, "15:00");
+});
+
+test("encaixes manuais distintos não são agrupados", () => {
+  const rows = buildUpcoming(
+    [
+      upcomingRow({ id: 1, startTime: "14:00", clientName: "Zé", booking: null }),
+      upcomingRow({ id: 2, startTime: "15:00", clientName: "Ana", booking: null }),
+    ],
+    new Date("2026-07-25T10:00:00"),
+    8,
+  );
+
+  assert.equal(rows.length, 2);
 });
 
 test("encaixe manual entra sem serviço nem telefone", () => {

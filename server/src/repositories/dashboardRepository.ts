@@ -11,7 +11,10 @@ const slotSelect = {
   clientName: true,
   employeeId: true,
   booking: {
+    // O id é o que permite agrupar os slots de um serviço longo numa reserva
+    // só — sem ele, receita e contagem saem dobradas.
     select: {
+      id: true,
       clientName: true,
       clientPhone: true,
       service: { select: { id: true, name: true, price: true } },
@@ -43,6 +46,7 @@ export const dashboardRepository = {
         employee: { select: { name: true } },
         booking: {
           select: {
+            id: true,
             clientName: true,
             clientPhone: true,
             service: { select: { name: true } },
