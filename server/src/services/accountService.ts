@@ -22,9 +22,10 @@ export const accountService = {
     }
 
     const nextEmail = normalizeEmail(input.email);
+    const emailChanged = requiresCurrentPassword(normalizeEmail(user.email), nextEmail);
 
     // Só a troca de e-mail paga o pedágio da senha: nome é dado de exibição.
-    if (requiresCurrentPassword(normalizeEmail(user.email), nextEmail)) {
+    if (emailChanged) {
       if (!input.currentPassword) {
         throw new BadRequestError("Current password is required to change the email");
       }
@@ -44,7 +45,14 @@ export const accountService = {
       }
     }
 
-    await userRepository.updateProfile(userId, { name: input.name, email: nextEmail });
+    // Sem essa guarda, salvar só o nome reescreveria o e-mail já gravado com
+    // a normalização atual (lowercase) sem pedir senha — e como o login busca
+    // por igualdade exata, isso destrava a troca de e-mail sem senha e ainda
+    // pode travar o login de quem digitava o e-mail com maiúsculas.
+    await userRepository.updateProfile(userId, {
+      name: input.name.trim(),
+      email: emailChanged ? nextEmail : user.email,
+    });
 
     // Devolve o mesmo shape de GET /auth/me para o cliente atualizar o
     // contexto sem uma segunda ida ao servidor.

@@ -8,7 +8,7 @@ import {
   clampPage,
   toAvailabilityDto,
   totalPagesFor,
-  utcMidnight,
+  businessToday,
 } from "./availabilityRules";
 
 export interface GenerateInput {
@@ -59,7 +59,7 @@ export const availabilityService = {
     now: Date,
   ) {
     const PAGE_SIZE = 7;
-    const todayStart = utcMidnight(now);
+    const todayStart = businessToday(now);
 
     const totalDays = await availabilityRepository.countDates(
       employeeId,

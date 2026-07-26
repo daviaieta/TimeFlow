@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildAvailabilityData,
+  businessToday,
   clampPage,
   normalizeClientName,
   toAvailabilityDto,
@@ -121,6 +122,18 @@ test("utcMidnight zera a hora e mantém o dia UTC", () => {
 
 test("utcMidnight numa data já em meia-noite não muda", () => {
   const result = utcMidnight(new Date("2026-07-25T00:00:00.000Z"));
+  assert.equal(result.toISOString(), "2026-07-25T00:00:00.000Z");
+});
+
+test("businessToday usa o dia em America/Sao_Paulo, não o dia UTC", () => {
+  // 21:30 em São Paulo (UTC-3) já é 00:30 do dia seguinte em UTC.
+  const result = businessToday(new Date("2026-07-26T00:30:00.000Z"));
+  assert.equal(result.toISOString(), "2026-07-25T00:00:00.000Z");
+});
+
+test("businessToday na virada da meia-noite local", () => {
+  // 00:30 em São Paulo é 03:30 UTC do mesmo dia.
+  const result = businessToday(new Date("2026-07-25T03:30:00.000Z"));
   assert.equal(result.toISOString(), "2026-07-25T00:00:00.000Z");
 });
 

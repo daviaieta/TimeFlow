@@ -15,6 +15,7 @@ import {
 interface CreateBusinessInput {
   name: string;
   slug: string;
+  address?: string | null;
   admin: {
     name: string;
     email: string;
@@ -60,6 +61,7 @@ export const businessService = {
     const { users, ...business } = await businessRepository.createWithAdmin({
       name: input.name,
       slug: input.slug,
+      address: input.address ?? null,
       admin: {
         name: input.admin.name,
         email: input.admin.email,
@@ -166,6 +168,6 @@ export const businessService = {
       throw new ConflictError("A business with this slug already exists");
     }
 
-    return businessRepository.update(businessId, input);
+    return businessRepository.update(businessId, { ...input, name: input.name.trim() });
   },
 };

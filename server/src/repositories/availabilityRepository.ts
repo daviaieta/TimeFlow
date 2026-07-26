@@ -30,13 +30,15 @@ export const availabilityRepository = {
     skip: number,
     take: number,
   ) {
-    return prisma.availability.findMany({
+    // findMany({ distinct }) faz o distinct/skip/take em memória sem a
+    // preview feature nativeDistinct — puxaria a tabela inteira desse lado
+    // de hoje pro processo Node. groupBy vira DISTINCT+LIMIT+OFFSET no SQL.
+    return prisma.availability.groupBy({
+      by: ["date"],
       where: { employeeId, date: sideOfToday(direction, todayStart) },
-      distinct: ["date"],
       orderBy: { date: direction === "upcoming" ? "asc" : "desc" },
       skip,
       take,
-      select: { date: true },
     });
   },
 
