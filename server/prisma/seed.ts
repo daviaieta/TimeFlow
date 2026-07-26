@@ -1,11 +1,17 @@
 import { PrismaClient, Role } from "@prisma/client";
 import { hashPassword } from "../src/lib/password";
 import { generateInviteToken } from "../src/lib/inviteToken";
+import { resolveSeedCredentials, shouldSeedTestInvite } from "./seedCredentials";
 
 const prisma = new PrismaClient();
 
-const SUPERADMIN_EMAIL = process.env.SEED_SUPERADMIN_EMAIL ?? "superadmin@timeflow.com";
-const SUPERADMIN_PASSWORD = process.env.SEED_SUPERADMIN_PASSWORD ?? "SuperAdmin123!";
+const NODE_ENV = process.env.NODE_ENV ?? "development";
+const { email: SUPERADMIN_EMAIL, password: SUPERADMIN_PASSWORD } =
+  resolveSeedCredentials({
+    nodeEnv: NODE_ENV,
+    email: process.env.SEED_SUPERADMIN_EMAIL,
+    password: process.env.SEED_SUPERADMIN_PASSWORD,
+  });
 const PENDING_INVITE_EMAIL =
   process.env.SEED_PENDING_INVITE_EMAIL ?? "convite-teste@timeflow.com";
 
@@ -54,7 +60,10 @@ async function seedPendingInvite(): Promise<void> {
 
 async function main(): Promise<void> {
   await seedSuperadmin();
-  await seedPendingInvite();
+
+  if (shouldSeedTestInvite(NODE_ENV)) {
+    await seedPendingInvite();
+  }
 }
 
 main()
