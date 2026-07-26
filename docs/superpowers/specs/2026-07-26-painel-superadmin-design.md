@@ -205,9 +205,12 @@ web/app/dashboard/page.tsx                       branch SUPERADMIN
 web/components/dashboard/platform-overview.tsx   fetch + tiles + orquestração
 web/components/dashboard/business-table.tsx      tabela sm+ / cards abaixo de sm
 web/components/dashboard/create-business-dialog.tsx
-web/lib/platform.ts (+ .test.ts)                 slugify(), businessStatus()
-web/lib/types.ts                                 PlatformOverview, BusinessRow
+web/components/dashboard/platform-tiles.tsx      os quatro cartões
+web/lib/platform.ts (+ .test.ts)                 tipos + slugify(), businessStatus()
 ```
+
+Tipos e helpers moram no mesmo módulo, seguindo `web/lib/dashboard.ts` — não em
+`web/lib/types.ts`, que guarda só as entidades cruas da API.
 
 **Tiles.** Quatro, no grid `sm:grid-cols-2 xl:grid-cols-4` que `kpi-cards.tsx` já usa:
 Negócios cadastrados · Colaboradores · Administradores · Convites pendentes. O último é o
