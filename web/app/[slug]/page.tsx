@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { fetchAdapter } from "@/adapters/fetchAdapter";
 import { formatBusinessName } from "@/lib/businessName";
 import { type PublicBusiness } from "@/lib/publicBooking";
+import { ServicesSection } from "./services-section";
 import { ShowcaseHero } from "./showcase-hero";
 
 interface PageProps {
@@ -65,6 +66,7 @@ export default async function BusinessShowcasePage({ params }: PageProps) {
   return (
     <div className="min-h-dvh bg-background">
       <ShowcaseHero catalog={catalog} todayKey={today} />
+      <ServicesSection catalog={catalog} />
     </div>
   );
 }
