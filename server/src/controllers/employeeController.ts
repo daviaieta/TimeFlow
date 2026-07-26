@@ -20,10 +20,7 @@ export interface UnlinkServiceParams {
   serviceId: number;
 }
 
-export async function listEmployees(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
+export async function listEmployees(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const employees = await employeeService.listEmployees(requireBusinessId(request));
   reply.send({ employees });
 }
@@ -32,10 +29,7 @@ export async function createEmployee(
   request: FastifyRequest<{ Body: CreateEmployeeBody }>,
   reply: FastifyReply,
 ): Promise<void> {
-  const employee = await employeeService.createEmployee(
-    requireBusinessId(request),
-    request.body,
-  );
+  const employee = await employeeService.createEmployee(requireBusinessId(request), request.body);
   reply.status(201).send({ employee });
 }
 
