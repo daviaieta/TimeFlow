@@ -1,3 +1,4 @@
+import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 
 export const userRepository = {
@@ -56,9 +57,14 @@ export const userRepository = {
 
   // Lista e não contagem: o botão de reenvio precisa do id do convidado.
   // password null = convite ainda não aceito.
+  // role: ADMIN porque este painel rastreia se o NEGÓCIO já foi reivindicado
+  // pelo seu admin. Convites de funcionário pendentes (password null também)
+  // são assunto da própria tela de Equipe do admin — incluí-los aqui infla o
+  // card de "convites pendentes" e pode fazer o botão de reenvio mirar na
+  // pessoa errada.
   findPendingInvites() {
     return prisma.user.findMany({
-      where: { businessId: { not: null }, password: null },
+      where: { businessId: { not: null }, password: null, role: Role.ADMIN },
       select: { id: true, name: true, email: true, role: true, businessId: true },
     });
   },
