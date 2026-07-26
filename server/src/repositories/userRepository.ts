@@ -14,7 +14,7 @@ export const userRepository = {
         name: true,
         email: true,
         role: true,
-        business: { select: { id: true, name: true, slug: true } },
+        business: { select: { id: true, name: true, slug: true, address: true } },
       },
     });
   },
