@@ -6,6 +6,7 @@ import {
   PublicBookingBody,
   PublicBusinessParams,
   PublicSlotsParams,
+  PublicSlotsQuery,
 } from "../controllers/publicController";
 
 // Rotas SEM authenticate — superfície pública do produto. Arquivo separado
@@ -22,7 +23,9 @@ const slugParamsSchema = {
   },
 };
 
-const slotsParamsSchema = {
+// serviceId é obrigatório: a lista de horários depende da duração do serviço,
+// então não existe "horários deste profissional" sem saber o que ele vai fazer.
+const slotsSchema = {
   params: {
     type: "object",
     required: ["slug", "employeeId"],
@@ -30,6 +33,14 @@ const slotsParamsSchema = {
     properties: {
       slug: { type: "string", minLength: 1 },
       employeeId: { type: "integer" },
+    },
+  },
+  querystring: {
+    type: "object",
+    required: ["serviceId"],
+    additionalProperties: false,
+    properties: {
+      serviceId: { type: "integer" },
     },
   },
 };
@@ -57,9 +68,9 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
     getPublicBusiness,
   );
 
-  app.get<{ Params: PublicSlotsParams }>(
+  app.get<{ Params: PublicSlotsParams; Querystring: PublicSlotsQuery }>(
     "/public/businesses/:slug/employees/:employeeId/slots",
-    { schema: slotsParamsSchema },
+    { schema: slotsSchema },
     listPublicSlots,
   );
 

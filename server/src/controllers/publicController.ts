@@ -10,6 +10,10 @@ export interface PublicSlotsParams {
   employeeId: number;
 }
 
+export interface PublicSlotsQuery {
+  serviceId: number;
+}
+
 export interface PublicBookingBody {
   availabilityId: number;
   serviceId: number;
@@ -27,12 +31,13 @@ export async function getPublicBusiness(
 }
 
 export async function listPublicSlots(
-  request: FastifyRequest<{ Params: PublicSlotsParams }>,
+  request: FastifyRequest<{ Params: PublicSlotsParams; Querystring: PublicSlotsQuery }>,
   reply: FastifyReply,
 ): Promise<void> {
   const slots = await publicBookingService.listEmployeeSlots(
     request.params.slug,
     request.params.employeeId,
+    request.query.serviceId,
     new Date(),
   );
   reply.send({ slots });

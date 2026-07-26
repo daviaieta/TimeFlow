@@ -53,7 +53,15 @@ export const availabilityRepository = {
     return prisma.availability.findMany({
       where: { isBooked: false, date: { gte: from }, employee: { businessId } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
-      select: { employeeId: true, date: true, startTime: true },
+      // id e endTime entram porque o próximo horário do catálogo depende de
+      // encadear slots livres até cobrir a duração do serviço.
+      select: {
+        id: true,
+        employeeId: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+      },
     });
   },
 

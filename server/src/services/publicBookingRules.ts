@@ -1,3 +1,5 @@
+import { toMinutes, toTime } from "../lib/time";
+
 // price chega como Prisma Decimal em produção e como string nos testes —
 // ambos respondem a toString().
 interface PriceLike {
@@ -78,21 +80,41 @@ export function isSlotUpcoming(
   return slot.startTime > `${hours}:${minutes}`;
 }
 
-// Slots chegam ordenados por data/hora — o primeiro futuro de cada
-// profissional vence. Quem não tem vaga à frente fica fora do mapa.
-export function firstUpcomingPerEmployee(
-  slots: { employeeId: number; date: Date; startTime: string }[],
+export interface EmployeeSlot extends DurationSlot {
+  employeeId: number;
+}
+
+// Próxima vaga de cada profissional em que um serviço de `durationMinutes`
+// cabe inteiro. Duração 0 = "qualquer horário livre", que é o que o card do
+// profissional mostra enquanto o cliente ainda não escolheu o serviço.
+//
+// Slots chegam ordenados por data/hora; quem não tem vaga à frente fica fora
+// do mapa e a tela mostra "sem vagas".
+export function nextSlotPerEmployee(
+  slots: EmployeeSlot[],
+  durationMinutes: number,
   now: Date,
 ): Map<number, NextSlot> {
-  const map = new Map<number, NextSlot>();
+  const byEmployee = new Map<number, EmployeeSlot[]>();
 
   for (const slot of slots) {
-    if (map.has(slot.employeeId)) continue;
     if (!isSlotUpcoming(slot, now)) continue;
+    const own = byEmployee.get(slot.employeeId) ?? [];
+    own.push(slot);
+    byEmployee.set(slot.employeeId, own);
+  }
 
-    map.set(slot.employeeId, {
-      date: slot.date.toISOString(),
-      startTime: slot.startTime,
+  const map = new Map<number, NextSlot>();
+
+  for (const [employeeId, own] of byEmployee) {
+    const first = own.find(
+      (slot) => slotRunForDuration(own, slot.id, durationMinutes) !== null,
+    );
+    if (!first) continue;
+
+    map.set(employeeId, {
+      date: first.date.toISOString(),
+      startTime: first.startTime,
     });
   }
 
@@ -104,15 +126,22 @@ export function firstUpcomingPerEmployee(
 export function toPublicBusinessDto(
   business: { name: string; slug: string },
   services: CatalogService[],
-  nextSlots: Map<number, NextSlot>,
+  freeSlots: EmployeeSlot[],
+  now: Date,
 ): PublicBusinessDto {
   const visible = services.filter((service) => service.employees.length > 0);
 
-  const withNextSlot = (employee: { id: number; name: string }): PublicEmployeeDto => ({
-    id: employee.id,
-    name: employee.name,
-    nextSlot: nextSlots.get(employee.id) ?? null,
-  });
+  const withNextSlot =
+    (nextSlots: Map<number, NextSlot>) =>
+    (employee: { id: number; name: string }): PublicEmployeeDto => ({
+      id: employee.id,
+      name: employee.name,
+      nextSlot: nextSlots.get(employee.id) ?? null,
+    });
+
+  // Sem serviço escolhido ainda, o card do profissional mostra a primeira
+  // vaga qualquer — é só uma prévia de quando ele volta a atender.
+  const anySlot = withNextSlot(nextSlotPerEmployee(freeSlots, 0, now));
 
   // Profissionais do topo: união dos serviços visíveis, na ordem de primeira
   // aparição, sem repetir quem atende mais de um serviço.
@@ -120,7 +149,7 @@ export function toPublicBusinessDto(
   for (const service of visible) {
     for (const employee of service.employees) {
       if (!professionals.has(employee.id)) {
-        professionals.set(employee.id, withNextSlot(employee));
+        professionals.set(employee.id, anySlot(employee));
       }
     }
   }
@@ -128,14 +157,80 @@ export function toPublicBusinessDto(
   return {
     business: { name: business.name, slug: business.slug },
     professionals: [...professionals.values()],
-    services: visible.map((service) => ({
-      id: service.id,
-      name: service.name,
-      duration: service.duration,
-      price: service.price.toString(),
-      employees: service.employees.map(withNextSlot),
-    })),
+    // Cada serviço anuncia a próxima vaga em que ELE cabe: uma descoloração
+    // de 1h não pode prometer um buraco de 30min entre dois compromissos.
+    services: visible.map((service) => {
+      const fits = withNextSlot(
+        nextSlotPerEmployee(freeSlots, service.duration, now),
+      );
+
+      return {
+        id: service.id,
+        name: service.name,
+        duration: service.duration,
+        price: service.price.toString(),
+        employees: service.employees.map(fits),
+      };
+    }),
   };
+}
+
+export interface DurationSlot {
+  id: number;
+  date: Date;
+  startTime: string;
+  endTime: string;
+}
+
+export function serviceEndTime(startTime: string, durationMinutes: number): string {
+  return toTime(toMinutes(startTime) + durationMinutes);
+}
+
+// A grade do colaborador é fixa, mas o serviço tem a duração que tem: um
+// atendimento mais longo que o slot avança sobre os seguintes. O run só existe
+// se esses vizinhos estiverem livres, colados e no mesmo dia — e sobra da
+// grade é perdida, porque ninguém é atendido nos minutos que restam.
+//
+// `slots` precisa vir ordenado por data/hora e conter apenas horários livres:
+// um slot reservado simplesmente não está na lista, e o run morre no buraco.
+export function slotRunForDuration<T extends DurationSlot>(
+  slots: T[],
+  startSlotId: number,
+  durationMinutes: number,
+): T[] | null {
+  const index = slots.findIndex((slot) => slot.id === startSlotId);
+  if (index === -1) return null;
+
+  const first = slots[index];
+  const target = toMinutes(first.startTime) + durationMinutes;
+
+  const run: T[] = [];
+  let covered = toMinutes(first.startTime);
+
+  for (let cursor = index; cursor < slots.length; cursor += 1) {
+    const slot = slots[cursor];
+
+    if (slot.date.getTime() !== first.date.getTime()) break;
+    if (toMinutes(slot.startTime) !== covered) break; // buraco na grade
+
+    run.push(slot);
+    covered = toMinutes(slot.endTime);
+
+    if (covered >= target) return run;
+  }
+
+  return null;
+}
+
+// O cliente só enxerga horários em que o serviço cabe inteiro — é o que
+// impede marcar 09:00 de descoloração com a barba das 09:30 já reservada.
+export function slotsFittingDuration<T extends DurationSlot>(
+  slots: T[],
+  durationMinutes: number,
+): T[] {
+  return slots.filter(
+    (slot) => slotRunForDuration(slots, slot.id, durationMinutes) !== null,
+  );
 }
 
 export function toPublicSlotDto(slot: {
@@ -152,11 +247,13 @@ export function toPublicSlotDto(slot: {
   };
 }
 
+// O fim que o cliente lê é o do serviço, não o do slot onde ele começou:
+// uma descoloração de 1h numa grade de 30min termina 15:00, não 14:30.
 export function buildBookingSummary(args: {
   businessName: string;
   service: { name: string; duration: number; price: PriceLike };
   employeeName: string;
-  slot: { date: Date; startTime: string; endTime: string };
+  slot: { date: Date; startTime: string };
   clientName: string;
 }): BookingSummary {
   return {
@@ -167,7 +264,7 @@ export function buildBookingSummary(args: {
     employee: args.employeeName,
     date: args.slot.date.toISOString(),
     startTime: args.slot.startTime,
-    endTime: args.slot.endTime,
+    endTime: serviceEndTime(args.slot.startTime, args.service.duration),
     clientName: args.clientName,
   };
 }
