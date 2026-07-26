@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Add01Icon } from "@hugeicons/core-free-icons";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
 import { Button } from "@/components/ui/button";
 import { BusinessTable } from "@/components/dashboard/business-table";
+import { CreateBusinessDialog } from "@/components/dashboard/create-business-dialog";
 import { PlatformTiles } from "@/components/dashboard/platform-tiles";
 import { PlatformOverview as PlatformOverviewData } from "@/lib/platform";
 
@@ -15,6 +18,7 @@ export function PlatformOverview() {
   const [data, setData] = useState<PlatformOverviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Devolve uma promise que nunca rejeita: erros de rede viram estado local,
   // para que `await load()` dentro da transition sempre resolva e o
@@ -56,7 +60,17 @@ export function PlatformOverview() {
             Os negócios cadastrados no Time Flow.
           </p>
         </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+          Novo negócio
+        </Button>
       </div>
+
+      <CreateBusinessDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={load}
+      />
 
       {error ? (
         <div className="mt-8 rounded-2xl border border-destructive/30 bg-destructive/5 p-8 text-center">
@@ -87,6 +101,9 @@ export function PlatformOverview() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Cadastre o primeiro negócio para começar.
                 </p>
+                <Button className="mt-4" size="sm" onClick={() => setCreateOpen(true)}>
+                  Cadastrar negócio
+                </Button>
               </div>
             ) : (
               <BusinessTable businesses={data.businesses} />
