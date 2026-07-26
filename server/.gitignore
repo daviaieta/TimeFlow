@@ -29,7 +29,9 @@ Thumbs.db
 *.swp
 *.swo
 
-# Prisma generated artifacts (the schema stub is committed)
+# Prisma generated artifacts (o schema e as migrations são commitados)
+prisma/*.db
+prisma/*.db-journal
 prisma/migrations/dev.db*
 node_modules/.prisma/
 
