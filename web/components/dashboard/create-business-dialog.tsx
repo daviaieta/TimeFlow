@@ -57,7 +57,25 @@ export function CreateBusinessDialog({
     setError(null);
   }
 
+  // Quem abre este dialog é o pai (platform-overview.tsx), mudando a prop
+  // `open` de fora — e o primitivo Base UI só chama `onOpenChange` em
+  // dismissals internos (Esc, overlay, botão fechar), não quando é o `open`
+  // externo que muda. Ou seja, resetar dentro de `handleOpenChange` nunca
+  // pega a reabertura. Por isso o reset ao abrir é feito aqui, comparando
+  // `open` com o valor do render anterior — ajuste de estado durante a
+  // renderização, sem efeito. É necessário porque uma requisição em voo pode
+  // assentar (setError) depois que o usuário já fechou o dialog; abrir de
+  // novo é o único momento garantidamente limpo, já que não dá pra saber o
+  // que aconteceu enquanto ele estava fechado.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) reset();
+  }
+
   function handleOpenChange(next: boolean) {
+    // Reset ao fechar também, por consistência (não é o que fecha a brecha,
+    // mas não custa nada manter).
     if (!next) reset();
     onOpenChange(next);
   }
