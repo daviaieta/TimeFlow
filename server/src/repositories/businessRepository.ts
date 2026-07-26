@@ -49,6 +49,15 @@ export const businessRepository = {
     });
   },
 
+  update(id: number, data: { name: string; slug: string; address: string | null }) {
+    return prisma.business.update({
+      where: { id },
+      // Campos explícitos, nunca o objeto do request inteiro: é o que impede
+      // mass-assignment de colunas que o schema da rota não previu.
+      data: { name: data.name, slug: data.slug, address: data.address },
+    });
+  },
+
   createWithAdmin({ name, slug, admin }: CreateWithAdminInput) {
     return prisma.business.create({
       data: {

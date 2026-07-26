@@ -4,9 +4,12 @@ import {
   createBusiness,
   listBusinesses,
   resendInvite,
+  updateBusiness,
   CreateBusinessBody,
   ResendInviteBody,
   ResendInviteParams,
+  UpdateBusinessBody,
+  UpdateBusinessParams,
 } from "../controllers/businessController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
@@ -51,6 +54,28 @@ const resendInviteSchema = {
   },
 };
 
+const updateBusinessSchema = {
+  params: {
+    type: "object",
+    required: ["id"],
+    additionalProperties: false,
+    properties: {
+      id: { type: "integer" },
+    },
+  },
+  body: {
+    type: "object",
+    required: ["name", "slug", "address"],
+    additionalProperties: false,
+    properties: {
+      name: { type: "string", minLength: 1 },
+      slug: { type: "string", minLength: 1, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      // Aceita null para limpar o endereço; string vazia vira null no cliente.
+      address: { type: ["string", "null"] },
+    },
+  },
+};
+
 export async function businessRoutes(app: FastifyInstance): Promise<void> {
   // Sem schema: a rota não recebe params, body nem querystring.
   app.get(
@@ -75,5 +100,14 @@ export async function businessRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [authenticate, authorize(Role.SUPERADMIN)],
     },
     resendInvite,
+  );
+
+  app.put<{ Params: UpdateBusinessParams; Body: UpdateBusinessBody }>(
+    "/businesses/:id",
+    {
+      schema: updateBusinessSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN)],
+    },
+    updateBusiness,
   );
 }

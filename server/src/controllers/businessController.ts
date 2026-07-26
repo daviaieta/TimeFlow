@@ -42,3 +42,26 @@ export async function resendInvite(
 
   reply.status(204).send();
 }
+
+export interface UpdateBusinessParams {
+  id: number;
+}
+
+export interface UpdateBusinessBody {
+  name: string;
+  slug: string;
+  address: string | null;
+}
+
+export async function updateBusiness(
+  request: FastifyRequest<{ Params: UpdateBusinessParams; Body: UpdateBusinessBody }>,
+  reply: FastifyReply,
+): Promise<void> {
+  const business = await businessService.updateBusiness(
+    request.params.id,
+    request.user.businessId,
+    request.body,
+  );
+
+  reply.send({ business });
+}

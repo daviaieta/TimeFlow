@@ -45,6 +45,14 @@ export const userRepository = {
     });
   },
 
+  updateProfile(id: number, data: { name: string; email: string }) {
+    return prisma.user.update({ where: { id }, data });
+  },
+
+  updatePassword(id: number, hashedPassword: string) {
+    return prisma.user.update({ where: { id }, data: { password: hashedPassword } });
+  },
+
   // groupBy em vez de _count por negócio: o Prisma aceita um único filtro por
   // relação em cada chave de _count, e aqui são dois recortes do mesmo `users`.
   countByBusinessAndRole() {

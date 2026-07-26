@@ -15,3 +15,14 @@ export function requiresCurrentPassword(
 ): boolean {
   return currentEmail !== nextEmail;
 }
+
+// Guard de PUT /businesses/:id: o :id vem da URL, então a única coisa que
+// impede um ADMIN de editar o negócio de outro é este cheque bater ANTES de
+// qualquer leitura do alvo — devolver 404 para um id que existe mas não é seu
+// vazaria a existência de outros negócios.
+export function canEditBusiness(
+  targetBusinessId: number,
+  userBusinessId: number | null,
+): boolean {
+  return userBusinessId !== null && targetBusinessId === userBusinessId;
+}

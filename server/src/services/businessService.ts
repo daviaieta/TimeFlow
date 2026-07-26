@@ -1,10 +1,11 @@
 import { Business, Role } from "@prisma/client";
 import { env } from "../config/env";
-import { AppError, ConflictError, NotFoundError } from "../lib/errors";
+import { AppError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
 import { generateInviteToken } from "../lib/inviteToken";
 import { sendEmployeeInviteEmail, sendInviteEmail } from "../lib/inviteEmail";
 import { businessRepository } from "../repositories/businessRepository";
 import { userRepository } from "../repositories/userRepository";
+import { canEditBusiness } from "./accountRules";
 import {
   PlatformOverview,
   buildBusinessRows,
@@ -142,5 +143,29 @@ export const businessService = {
     }
 
     await userRepository.resetInviteToken(user.id, token, expiresAt);
+  },
+
+  async updateBusiness(
+    businessId: number,
+    userBusinessId: number | null,
+    input: { name: string; slug: string; address: string | null },
+  ) {
+    // Antes de qualquer leitura do alvo: responder 404 para um id que existe
+    // mas não é seu vazaria a existência de outros negócios.
+    if (!canEditBusiness(businessId, userBusinessId)) {
+      throw new ForbiddenError("You do not have permission to edit this business");
+    }
+
+    const business = await businessRepository.findById(businessId);
+    if (!business) {
+      throw new NotFoundError("Business not found");
+    }
+
+    const slugOwner = await businessRepository.findBySlug(input.slug);
+    if (slugOwner && slugOwner.id !== businessId) {
+      throw new ConflictError("A business with this slug already exists");
+    }
+
+    return businessRepository.update(businessId, input);
   },
 };
