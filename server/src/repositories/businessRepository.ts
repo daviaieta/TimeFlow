@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { PlanName, Role, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 
 interface CreateWithAdminInput {
@@ -57,6 +57,39 @@ export const businessRepository = {
       // mass-assignment de colunas que o schema da rota não previu.
       data: { name: data.name, slug: data.slug, address: data.address },
     });
+  },
+
+  updateBilling(
+    id: number,
+    data: {
+      planName: PlanName;
+      asaasCustomerId: string;
+      asaasSubscriptionId: string;
+      cpfCnpj: string;
+    },
+  ) {
+    return prisma.business.update({
+      where: { id },
+      data: {
+        planName: data.planName,
+        asaasCustomerId: data.asaasCustomerId,
+        asaasSubscriptionId: data.asaasSubscriptionId,
+        cpfCnpj: data.cpfCnpj,
+      },
+    });
+  },
+
+  // Único ponto que muda subscriptionStatus — chamado pelo webhook, nunca por
+  // subscribe() diretamente: só o Asaas confirmando o pagamento vira ACTIVE.
+  updateSubscriptionStatus(id: number, status: SubscriptionStatus) {
+    return prisma.business.update({
+      where: { id },
+      data: { subscriptionStatus: status },
+    });
+  },
+
+  findByAsaasSubscriptionId(asaasSubscriptionId: string) {
+    return prisma.business.findUnique({ where: { asaasSubscriptionId } });
   },
 
   createWithAdmin({ name, slug, address, admin }: CreateWithAdminInput) {

@@ -16,6 +16,19 @@ enum Role {
   EMPLOYEE
 }
 
+enum PlanName {
+  ESSENCIAL
+  PROFISSIONAL
+  EQUIPE
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
 model Business {
   id        Int      @id @default(autoincrement())
   name      String
@@ -25,6 +38,14 @@ model Business {
   address   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Cobrança: nasce PENDING (nunca assinou). Só um webhook do Asaas confirma
+  // pagamento e vira ACTIVE — nada no fluxo de login muda esse valor.
+  planName            PlanName?
+  subscriptionStatus  SubscriptionStatus @default(PENDING)
+  asaasCustomerId     String?            @unique
+  asaasSubscriptionId String?            @unique
+  cpfCnpj             String?
 
   users    User[]
   services Service[]
