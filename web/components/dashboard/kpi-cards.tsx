@@ -67,7 +67,7 @@ export function KpiCards({ kpis, days }: { kpis: DashboardKpis; days: number }) 
       <Tile
         label="Reservas no período"
         value={String(kpis.bookings.total)}
-        hint={`${kpis.bookings.online} pelo site · ${kpis.bookings.manual} encaixes`}
+        hint={`${kpis.bookings.online} pelo site · ${kpis.bookings.internal} por atendente`}
         icon={Calendar03Icon}
       />
 

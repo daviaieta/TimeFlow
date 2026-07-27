@@ -390,7 +390,7 @@ export default function SchedulePage() {
                                 </p>
                               </div>
 
-                              {slot.locked ? (
+                              {slot.isBooked ? (
                                 <Badge>Reservado</Badge>
                               ) : (
                                 <div className="flex shrink-0 gap-1">

@@ -2,7 +2,7 @@ export type PeriodDays = 7 | 30 | 90;
 
 export interface DashboardKpis {
   occupancy: { rate: number; booked: number; total: number };
-  bookings: { total: number; online: number; manual: number };
+  bookings: { total: number; online: number; internal: number };
   revenue: { scheduled: string; averageTicket: string };
   pace: { current: number; previous: number };
 }

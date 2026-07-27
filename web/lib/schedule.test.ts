@@ -18,7 +18,6 @@ function slot(overrides: Partial<Availability> & { id: number }): Availability {
     endTime: "10:00",
     isBooked: false,
     clientName: null,
-    locked: false,
     ...overrides,
   };
 }
