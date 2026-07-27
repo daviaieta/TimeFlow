@@ -39,8 +39,41 @@ export const billingService = {
       throw new NotFoundError("Admin user not found");
     }
 
-    // Reaproveita o customer se essa empresa já tentou assinar antes (ex.:
-    // estava PAST_DUE e está tentando de novo) — evita duplicar cliente no Asaas.
+    // Retry: essa empresa já tem uma assinatura Asaas viva (ex.: ficou
+    // PAST_DUE e o ADMIN clicou em "Assinar" de novo). NÃO cria uma segunda
+    // assinatura aqui — isso cobraria em dobro e órfã a primeira (os
+    // webhooks dela deixariam de bater com qualquer Business, ver
+    // handleWebhook abaixo). Em vez disso reusa a assinatura existente e
+    // devolve a fatura em aberto dela: é exatamente o que uma empresa
+    // PAST_DUE precisa pra pagar. Troca de plano (input.planName diferente do
+    // atual) está fora de escopo nesta entrega (spec, "Fora de escopo":
+    // upgrade/downgrade) — mesmo assim não criamos assinatura nova; só
+    // persistimos o planName localmente.
+    if (business.asaasSubscriptionId && business.asaasCustomerId) {
+      if (input.cpfCnpj !== business.cpfCnpj) {
+        // Corrige no Asaas o cpfCnpj que o cliente está tentando corrigir
+        // aqui — sem isso, a correção não muda nada onde importa (a fatura).
+        await asaasClient.updateCustomer(business.asaasCustomerId, { cpfCnpj: input.cpfCnpj });
+      }
+
+      const payment = await asaasClient.getFirstSubscriptionPayment(business.asaasSubscriptionId);
+      if (!payment) {
+        throw new AppError("Asaas did not return a payment for the existing subscription", 502);
+      }
+
+      await businessRepository.updateBilling(businessId, {
+        planName: input.planName,
+        asaasCustomerId: business.asaasCustomerId,
+        asaasSubscriptionId: business.asaasSubscriptionId,
+        cpfCnpj: input.cpfCnpj,
+      });
+
+      return { checkoutUrl: payment.invoiceUrl };
+    }
+
+    // Reaproveita o customer se essa empresa já tentou assinar antes mas não
+    // chegou a criar a assinatura (ex.: falhou entre as duas chamadas) —
+    // evita duplicar cliente no Asaas.
     let customerId = business.asaasCustomerId;
     if (!customerId) {
       const customer = await asaasClient.createCustomer({
@@ -49,6 +82,8 @@ export const billingService = {
         cpfCnpj: input.cpfCnpj,
       });
       customerId = customer.id;
+    } else if (input.cpfCnpj !== business.cpfCnpj) {
+      await asaasClient.updateCustomer(customerId, { cpfCnpj: input.cpfCnpj });
     }
 
     const nextDueDate = new Date();
@@ -81,14 +116,30 @@ export const billingService = {
 
   async handleWebhook(payload: WebhookPayload): Promise<void> {
     const status = statusFromWebhookEvent(payload.event);
-    if (!status || !payload.payment?.subscription) {
+    if (!status) {
+      // Evento não mapeado (PAYMENT_CREATED, PAYMENT_UPDATED, etc.) — alto
+      // volume, esperado, sem ação — não vale logar.
+      return;
+    }
+
+    if (!payload.payment?.subscription) {
+      // Corpo malformado — baixo valor de log, não é o caso que o spec pede.
       return;
     }
 
     const business = await businessRepository.findByAsaasSubscriptionId(payload.payment.subscription);
     if (!business) {
-      // Assinatura de outro ambiente (ex.: sandbox local de outro dev) ou já
-      // removida — não é erro do Asaas, não deve virar retry.
+      // Chegou um evento de pagamento de verdade pra uma assinatura que não
+      // reconhecemos — não é erro do Asaas (não deve gerar retry, por isso
+      // ainda respondemos 200), mas é o sinal operacional que teria pego o
+      // bug de assinatura duplicada/órfã: vale um warning. console.warn (não
+      // request.log) porque o Fastify deste projeto sobe sem `logger`
+      // configurado em app.ts — request.log é um logger nulo, silencioso;
+      // console.warn é o que o resto do serviço já usa pra isso
+      // (businessService.ts usa console.error/console.log do mesmo jeito).
+      console.warn(
+        `Asaas webhook: no Business matches asaasSubscriptionId=${payload.payment.subscription} (event=${payload.event})`,
+      );
       return;
     }
 

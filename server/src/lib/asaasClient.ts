@@ -47,6 +47,17 @@ export const asaasClient = {
     });
   },
 
+  // Corrige um cpfCnpj já cadastrado no Asaas (ex.: cliente digitou errado na
+  // primeira tentativa e corrigiu num retry) — sem isso, nosso banco e o
+  // customer real do Asaas ficam permanentemente divergentes, e a "correção"
+  // não muda nada onde de fato importa (a fatura gerada pelo Asaas).
+  updateCustomer(customerId: string, input: { cpfCnpj: string }): Promise<AsaasCustomer> {
+    return asaasFetch<AsaasCustomer>(`/customers/${customerId}`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
   createSubscription(input: {
     customer: string;
     value: number;
