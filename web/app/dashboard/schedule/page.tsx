@@ -109,7 +109,14 @@ export default function SchedulePage() {
   const [deletingSubmitting, setDeletingSubmitting] = useState(false);
 
   const loadAvailabilities = useCallback(() => {
-    if (selectedEmployeeId === null) return Promise.resolve();
+    if (selectedEmployeeId === null) {
+      // Ainda não há colaborador selecionado (ex.: negócio sem nenhum
+      // colaborador, ou a busca de /employees falhou) — sem isso, o
+      // spinner inicial (loading = true) nunca seria desligado. O
+      // setState vai num .then() (não direto no corpo do effect) pra não
+      // disparar o lint de setState síncrono dentro de useEffect.
+      return Promise.resolve().then(() => setLoading(false));
+    }
 
     return fetchAdapter<{
       availabilities: Availability[];
@@ -335,6 +342,12 @@ export default function SchedulePage() {
         ) : listError ? (
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-destructive">
             {listError}
+          </p>
+        ) : selectedEmployeeId === null ? (
+          <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
+            {employees.length === 0
+              ? "Nenhum colaborador cadastrado ainda."
+              : "Selecione um colaborador para ver a agenda."}
           </p>
         ) : dayGroups.length === 0 ? (
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
