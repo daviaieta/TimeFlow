@@ -101,8 +101,11 @@ Novo preHandler `requireActiveSubscription`: para `request.user.businessId === n
 (SUPERADMIN), passa direto. Para ADMIN/EMPLOYEE, busca o `Business`, e se
 `subscriptionStatus !== "ACTIVE"` lança um erro novo (`PaymentRequiredError`, HTTP 402).
 Aplicado em `serviceRoutes`, `employeeRoutes`, `availabilityRoutes`, `dashboardRoutes` —
-**não** em `businessRoutes` (onde mora a rota de assinatura: se o gate barrasse essa rota
-também, ninguém conseguiria pagar) nem em `authRoutes`.
+**não** em `businessRoutes`, `billingRoutes` (onde mora a rota de assinatura: se o gate
+barrasse essa rota também, ninguém conseguiria pagar) nem em `authRoutes`. Efeito
+colateral aceito: um ADMIN sem assinatura ativa ainda consegue chamar `PUT
+/businesses/:id` (editar nome/slug/endereço do próprio negócio) — inofensivo, e gatear
+essa rota também não traria benefício real.
 
 No front, `web/app/dashboard/layout.tsx` já busca `/auth/me` a cada carga — a resposta
 ganha `business.planName`/`business.subscriptionStatus`. Se o usuário não é SUPERADMIN e
