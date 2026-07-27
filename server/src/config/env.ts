@@ -23,7 +23,10 @@ export const env = {
   // usa sempre a primeira — o domínio final, não uma URL de preview.
   webOrigins,
   webOrigin: webOrigins[0],
-  asaasApiUrl: required("ASAAS_API_URL"),
-  asaasApiKey: required("ASAAS_API_KEY"),
-  asaasWebhookToken: required("ASAAS_WEBHOOK_TOKEN"),
+  stripeSecretKey: required("STRIPE_SECRET_KEY"),
+  // Não é required: em desenvolvimento não há webhook configurado, e o fluxo
+  // principal de ativação (confirmação no retorno do checkout) não depende
+  // dele. Vazio faz constructEvent rejeitar toda chamada — falha fechado, que
+  // é o comportamento certo.
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
 };
