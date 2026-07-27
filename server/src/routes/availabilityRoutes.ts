@@ -60,6 +60,7 @@ const listAvailabilitiesSchema = {
     properties: {
       tab: { type: "string", enum: ["upcoming", "past"] },
       page: { type: "integer", minimum: 1 },
+      employeeId: { type: "integer" },
     },
   },
 };
@@ -79,7 +80,7 @@ export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
     "/availabilities",
     {
       schema: listAvailabilitiesSchema,
-      preHandler: [authenticate, requireActiveSubscription, authorize(Role.EMPLOYEE)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN, Role.EMPLOYEE)],
     },
     listAvailabilities,
   );

@@ -25,6 +25,7 @@ export interface GenerateAvailabilitiesBody {
 export interface ListAvailabilitiesQuery {
   tab?: "upcoming" | "past";
   page?: number;
+  employeeId?: number;
 }
 
 export async function listAvailabilities(
@@ -35,7 +36,8 @@ export async function listAvailabilities(
   const page = request.query.page ?? 1;
 
   const result = await availabilityService.listAvailabilities(
-    request.user.sub,
+    request.user,
+    request.query.employeeId,
     { tab, page },
     new Date(),
   );
