@@ -203,7 +203,11 @@ por:
 
 ```ts
   stripeSecretKey: required("STRIPE_SECRET_KEY"),
-  stripeWebhookSecret: required("STRIPE_WEBHOOK_SECRET"),
+  // Não é required: em desenvolvimento não há webhook configurado, e o fluxo
+  // principal de ativação (confirmação no retorno do checkout) não depende
+  // dele. Vazio faz constructEvent rejeitar toda chamada — falha fechado, que
+  // é o comportamento certo.
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
 ```
 
 - [ ] **Step 3: Documentar no `.env.example`**
@@ -222,10 +226,10 @@ STRIPE_SECRET_KEY=""
 STRIPE_WEBHOOK_SECRET=""
 ```
 
-Nota: `STRIPE_WEBHOOK_SECRET` é `required()` no `env.ts` — a string vazia do `.env` local
-faria o `required()` **falhar**. Então em `server/.env` (o arquivo real, não o example) deixe
-um placeholder qualquer não-vazio, ex.: `STRIPE_WEBHOOK_SECRET="whsec_placeholder_dev"`.
-Assinatura inválida só derruba a rota de webhook, que não é o caminho principal em dev.
+Nota: `server/.env` (o arquivo real, gitignorado) hoje tem placeholders `ASAAS_*` que a
+Task 1 precisou repor para o `required()` antigo não derrubar a suíte. Depois de trocar o
+`env.ts` neste step, **remova essas três linhas do `server/.env`** — elas não servem mais
+para nada.
 
 - [ ] **Step 4: Criar o cliente Stripe**
 
