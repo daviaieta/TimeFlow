@@ -89,20 +89,19 @@ export default function DashboardLayout({
     loadUser();
   }, [loadUser]);
 
-  // Sem assinatura ativa, só Configurações fica acessível — é lá que mora o
-  // card que inicia o pagamento. Sem trial: bloqueia desde a criação do
-  // negócio, não só depois de um período gratuito.
+  // Sem assinatura ativa não há nada de útil no dashboard: manda para a
+  // página de assinatura, que é cheia e não tem sidebar. Sem trial: bloqueia
+  // desde a criação do negócio, não só depois de um período gratuito.
   useEffect(() => {
     if (
       user &&
       user.role !== "SUPERADMIN" &&
       user.business &&
-      user.business.subscriptionStatus !== "ACTIVE" &&
-      !pathname.startsWith("/dashboard/settings")
+      user.business.subscriptionStatus !== "ACTIVE"
     ) {
-      router.replace("/dashboard/settings");
+      router.replace("/assinatura");
     }
-  }, [user, pathname, router]);
+  }, [user, router]);
 
   // O contexto precisa de identidade estável: recriar o objeto a cada render
   // faria toda tela consumidora re-renderizar sem motivo.
