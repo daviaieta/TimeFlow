@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { PlanName, SubscriptionStatus } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
 const PLAN_LABELS: Record<PlanName, string> = {
   ESSENCIAL: "Essencial",
@@ -34,14 +35,12 @@ export function BillingCard({
         {planName ? ` · Plano ${PLAN_LABELS[planName]}` : ""}
       </p>
 
-      <Button
-        render={<Link href="/assinatura" />}
-        variant="outline"
-        size="sm"
-        className="mt-6"
+      <Link
+        href="/assinatura"
+        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-6")}
       >
         {subscriptionStatus === "ACTIVE" ? "Ver planos" : "Ativar assinatura"}
-      </Button>
+      </Link>
     </section>
   );
 }
