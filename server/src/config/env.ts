@@ -23,4 +23,7 @@ export const env = {
   // usa sempre a primeira — o domínio final, não uma URL de preview.
   webOrigins,
   webOrigin: webOrigins[0],
+  asaasApiUrl: required("ASAAS_API_URL"),
+  asaasApiKey: required("ASAAS_API_KEY"),
+  asaasWebhookToken: required("ASAAS_WEBHOOK_TOKEN"),
 };
