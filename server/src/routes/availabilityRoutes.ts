@@ -13,6 +13,7 @@ import {
 } from "../controllers/availabilityController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
+import { requireActiveSubscription } from "../middlewares/requireActiveSubscription";
 
 const availabilityBodySchema = {
   body: {
@@ -81,7 +82,7 @@ export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
     "/availabilities",
     {
       schema: availabilityBodySchema,
-      preHandler: [authenticate, authorize(Role.EMPLOYEE)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.EMPLOYEE)],
     },
     createAvailability,
   );
@@ -90,7 +91,7 @@ export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
     "/availabilities",
     {
       schema: listAvailabilitiesSchema,
-      preHandler: [authenticate, authorize(Role.EMPLOYEE)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.EMPLOYEE)],
     },
     listAvailabilities,
   );
@@ -99,7 +100,7 @@ export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
     "/availabilities/generate",
     {
       schema: generateSchema,
-      preHandler: [authenticate, authorize(Role.EMPLOYEE)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.EMPLOYEE)],
     },
     generateAvailabilities,
   );
@@ -108,7 +109,7 @@ export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
     "/availabilities/:id",
     {
       schema: { ...availabilityBodySchema, ...availabilityParamsSchema },
-      preHandler: [authenticate, authorize(Role.EMPLOYEE)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.EMPLOYEE)],
     },
     updateAvailability,
   );
@@ -117,7 +118,7 @@ export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
     "/availabilities/:id",
     {
       schema: availabilityParamsSchema,
-      preHandler: [authenticate, authorize(Role.EMPLOYEE)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.EMPLOYEE)],
     },
     deleteAvailability,
   );

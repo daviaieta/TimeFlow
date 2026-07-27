@@ -36,3 +36,9 @@ export class BadRequestError extends AppError {
     super(message, 400);
   }
 }
+
+export class PaymentRequiredError extends AppError {
+  constructor(message = "Subscription payment required") {
+    super(message, 402);
+  }
+}

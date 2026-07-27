@@ -89,6 +89,21 @@ export default function DashboardLayout({
     loadUser();
   }, [loadUser]);
 
+  // Sem assinatura ativa, só Configurações fica acessível — é lá que mora o
+  // card que inicia o pagamento. Sem trial: bloqueia desde a criação do
+  // negócio, não só depois de um período gratuito.
+  useEffect(() => {
+    if (
+      user &&
+      user.role !== "SUPERADMIN" &&
+      user.business &&
+      user.business.subscriptionStatus !== "ACTIVE" &&
+      !pathname.startsWith("/dashboard/settings")
+    ) {
+      router.replace("/dashboard/settings");
+    }
+  }, [user, pathname, router]);
+
   // O contexto precisa de identidade estável: recriar o objeto a cada render
   // faria toda tela consumidora re-renderizar sem motivo.
   const contextValue = useMemo(

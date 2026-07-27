@@ -10,6 +10,7 @@ import {
 } from "../controllers/serviceController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
+import { requireActiveSubscription } from "../middlewares/requireActiveSubscription";
 
 const serviceBodySchema = {
   body: {
@@ -39,14 +40,14 @@ export async function serviceRoutes(app: FastifyInstance): Promise<void> {
     "/services",
     {
       schema: serviceBodySchema,
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     createService,
   );
 
   app.get(
     "/services",
-    { preHandler: [authenticate, authorize(Role.ADMIN, Role.EMPLOYEE)] },
+    { preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN, Role.EMPLOYEE)] },
     listServices,
   );
 
@@ -54,7 +55,7 @@ export async function serviceRoutes(app: FastifyInstance): Promise<void> {
     "/services/:id",
     {
       schema: { ...serviceBodySchema, ...serviceParamsSchema },
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     updateService,
   );
@@ -63,7 +64,7 @@ export async function serviceRoutes(app: FastifyInstance): Promise<void> {
     "/services/:id",
     {
       schema: serviceParamsSchema,
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     deleteService,
   );
