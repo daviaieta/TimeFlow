@@ -39,13 +39,13 @@ model Business {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Cobrança: nasce PENDING (nunca assinou). Só um webhook do Asaas confirma
-  // pagamento e vira ACTIVE — nada no fluxo de login muda esse valor.
-  planName            PlanName?
-  subscriptionStatus  SubscriptionStatus @default(PENDING)
-  asaasCustomerId     String?            @unique
-  asaasSubscriptionId String?            @unique
-  cpfCnpj             String?
+  // Cobrança: nasce PENDING (nunca assinou). Vira ACTIVE só com confirmação
+  // verificada do Stripe — pelo retorno do checkout ou pelo webhook. Nada no
+  // fluxo de login muda esse valor.
+  planName             PlanName?
+  subscriptionStatus   SubscriptionStatus @default(PENDING)
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
 
   users    User[]
   services Service[]

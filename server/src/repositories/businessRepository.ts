@@ -59,28 +59,25 @@ export const businessRepository = {
     });
   },
 
-  updateBilling(
-    id: number,
-    data: {
-      planName: PlanName;
-      asaasCustomerId: string;
-      asaasSubscriptionId: string;
-      cpfCnpj: string;
-    },
-  ) {
+  // Só planName e customer: o stripeSubscriptionId só existe DEPOIS que o
+  // pagamento é confirmado, e vem por setStripeSubscriptionId.
+  updateBilling(id: number, data: { planName: PlanName; stripeCustomerId: string }) {
     return prisma.business.update({
       where: { id },
-      data: {
-        planName: data.planName,
-        asaasCustomerId: data.asaasCustomerId,
-        asaasSubscriptionId: data.asaasSubscriptionId,
-        cpfCnpj: data.cpfCnpj,
-      },
+      data: { planName: data.planName, stripeCustomerId: data.stripeCustomerId },
     });
   },
 
-  // Único ponto que muda subscriptionStatus — chamado pelo webhook, nunca por
-  // subscribe() diretamente: só o Asaas confirmando o pagamento vira ACTIVE.
+  setStripeSubscriptionId(id: number, stripeSubscriptionId: string) {
+    return prisma.business.update({
+      where: { id },
+      data: { stripeSubscriptionId },
+    });
+  },
+
+  // Único ponto que muda subscriptionStatus — chamado pela confirmação do
+  // checkout e pelo webhook, nunca por createCheckoutSession: só o Stripe
+  // dizendo que foi pago vira ACTIVE.
   updateSubscriptionStatus(id: number, status: SubscriptionStatus) {
     return prisma.business.update({
       where: { id },
@@ -88,8 +85,14 @@ export const businessRepository = {
     });
   },
 
-  findByAsaasSubscriptionId(asaasSubscriptionId: string) {
-    return prisma.business.findUnique({ where: { asaasSubscriptionId } });
+  findByStripeSubscriptionId(stripeSubscriptionId: string) {
+    return prisma.business.findUnique({ where: { stripeSubscriptionId } });
+  },
+
+  // Fallback do webhook: nem todo evento de fatura expõe a subscription no
+  // mesmo lugar entre versões da API do Stripe, mas todos trazem o customer.
+  findByStripeCustomerId(stripeCustomerId: string) {
+    return prisma.business.findUnique({ where: { stripeCustomerId } });
   },
 
   createWithAdmin({ name, slug, address, admin }: CreateWithAdminInput) {
