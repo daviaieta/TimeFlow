@@ -342,7 +342,7 @@ function plural(count: number, one: string, many: string): string {
 
 // Uma reserva longa chega aqui como vários slots consecutivos. O dono quer
 // ver o compromisso, não a grade: a linha nasce no primeiro slot e se estica
-// até o fim do último. Encaixe manual não tem booking e nunca agrupa.
+// até o fim do último. Só slots com o MESMO booking.id se agrupam.
 function mergeSlotsOfSameBooking(rows: UpcomingSlotRow[]): UpcomingSlotRow[] {
   const merged: UpcomingSlotRow[] = [];
   const position = new Map<number, number>();

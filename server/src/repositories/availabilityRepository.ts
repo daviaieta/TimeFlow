@@ -9,8 +9,8 @@ function sideOfToday(direction: ScheduleDirection, todayStart: Date) {
   return direction === "upcoming" ? { gte: todayStart } : { lt: todayStart };
 }
 
-// O booking é o que distingue reserva de cliente externo (intocável) de
-// encaixe manual (editável pelo dono).
+// O booking é o que determina se o slot é imutável: quando existe, o slot não
+// pode ser editado ou removido. isBooked sozinho não é suficiente para esse check.
 const withBooking = { booking: { select: { id: true, clientName: true } } };
 
 export const availabilityRepository = {

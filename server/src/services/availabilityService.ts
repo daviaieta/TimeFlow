@@ -43,8 +43,9 @@ async function findOwnedAvailability(
   return availability;
 }
 
-// A trava é o Booking, não o isBooked: um encaixe digitado pelo próprio
-// colaborador precisa continuar corrigível por ele.
+// A trava é o Booking, não o isBooked: só slots com uma Booking real (feita
+// por cliente externo ou atendente via painel) devem ser imutáveis. Checar
+// isBooked sozinho seria muito amplo.
 function assertNotBooked(availability: AvailabilityRow, action: string): void {
   if (availability.booking) {
     throw new ConflictError(`This time slot is booked and cannot be ${action}`);
