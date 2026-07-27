@@ -1,4 +1,4 @@
-import { isSlotUpcoming } from "./publicBookingRules";
+import { isSlotUpcoming } from "./bookingRules";
 
 // price chega como Prisma Decimal em produção e como string nos testes —
 // ambos respondem a toString(). Mesmo contrato de publicBookingRules.

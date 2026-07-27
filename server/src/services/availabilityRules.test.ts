@@ -3,22 +3,10 @@ import { test } from "node:test";
 import {
   businessToday,
   clampPage,
-  normalizeClientName,
   toAvailabilityDto,
   totalPagesFor,
   utcMidnight,
 } from "./availabilityRules";
-
-test("nome com espaços em volta é normalizado", () => {
-  assert.equal(normalizeClientName("  Marcos  "), "Marcos");
-});
-
-test("nome vazio ou só espaços vira null", () => {
-  assert.equal(normalizeClientName(""), null);
-  assert.equal(normalizeClientName("   "), null);
-  assert.equal(normalizeClientName(null), null);
-  assert.equal(normalizeClientName(undefined), null);
-});
 
 test("slot livre não tem cliente", () => {
   const dto = toAvailabilityDto({

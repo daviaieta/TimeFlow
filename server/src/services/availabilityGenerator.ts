@@ -1,5 +1,5 @@
 import { toMinutes, toTime } from "../lib/time";
-import { isSlotUpcoming } from "./publicBookingRules";
+import { isSlotUpcoming } from "./bookingRules";
 
 export interface WorkWindow {
   workStart: string;

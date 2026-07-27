@@ -1,8 +1,3 @@
-export function normalizeClientName(value?: string | null): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
-
 export interface AvailabilityInput {
   date: string;
   startTime: string;

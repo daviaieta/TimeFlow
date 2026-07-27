@@ -5,12 +5,14 @@ import { bookingRepository } from "../repositories/bookingRepository";
 import { businessRepository } from "../repositories/businessRepository";
 import { employeeRepository } from "../repositories/employeeRepository";
 import { serviceRepository } from "../repositories/serviceRepository";
-import { normalizeClientName } from "./availabilityRules";
 import {
-  buildBookingSummary,
   isSlotUpcoming,
+  normalizeClientName,
   slotRunForDuration,
   slotsFittingDuration,
+} from "./bookingRules";
+import {
+  buildBookingSummary,
   toPublicBusinessDto,
   toPublicSlotDto,
 } from "./publicBookingRules";
