@@ -4,7 +4,6 @@ import { planAvailabilities } from "./availabilityGenerator";
 import {
   AvailabilityInput,
   AvailabilityRow,
-  buildAvailabilityData,
   clampPage,
   toAvailabilityDto,
   totalPagesFor,
@@ -93,30 +92,17 @@ export const availabilityService = {
     };
   },
 
-  async createAvailability(employeeId: number, input: AvailabilityInput) {
-    validateTimeRange(input);
-
-    const data = buildAvailabilityData(input);
-    const duplicate = await availabilityRepository.findByUniqueSlot(
-      employeeId,
-      data.date,
-      data.startTime,
-    );
-    if (duplicate) {
-      throw new ConflictError("You already have a time slot starting at this time");
-    }
-
-    const created = await availabilityRepository.create(employeeId, data);
-    return toAvailabilityDto(created);
-  },
-
   async updateAvailability(employeeId: number, id: number, input: AvailabilityInput) {
     validateTimeRange(input);
 
     const availability = await findOwnedAvailability(employeeId, id);
     assertNotBooked(availability, "changed");
 
-    const data = buildAvailabilityData(input);
+    const data = {
+      date: new Date(input.date),
+      startTime: input.startTime,
+      endTime: input.endTime,
+    };
     const duplicate = await availabilityRepository.findByUniqueSlot(
       employeeId,
       data.date,

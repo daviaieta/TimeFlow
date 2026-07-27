@@ -5,7 +5,6 @@ export interface AvailabilityBody {
   date: string;
   startTime: string;
   endTime: string;
-  clientName?: string | null;
 }
 
 export interface AvailabilityParams {
@@ -42,17 +41,6 @@ export async function listAvailabilities(
   );
 
   reply.send(result);
-}
-
-export async function createAvailability(
-  request: FastifyRequest<{ Body: AvailabilityBody }>,
-  reply: FastifyReply,
-): Promise<void> {
-  const availability = await availabilityService.createAvailability(
-    request.user.sub,
-    request.body,
-  );
-  reply.status(201).send({ availability });
 }
 
 export async function updateAvailability(

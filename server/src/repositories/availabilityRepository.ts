@@ -119,13 +119,6 @@ export const availabilityRepository = {
     });
   },
 
-  create(employeeId: number, data: AvailabilityData) {
-    return prisma.availability.create({
-      data: { ...data, employeeId },
-      include: withBooking,
-    });
-  },
-
   update(id: number, data: AvailabilityData) {
     return prisma.availability.update({
       where: { id },

@@ -29,6 +29,11 @@ enum SubscriptionStatus {
   CANCELED
 }
 
+enum BookingSource {
+  ONLINE
+  INTERNAL
+}
+
 model Business {
   id        Int      @id @default(autoincrement())
   name      String
@@ -96,20 +101,17 @@ model EmployeeService {
 }
 
 model Availability {
-  id         Int      @id @default(autoincrement())
-  date       DateTime
-  startTime  String
-  endTime    String
-  isBooked   Boolean  @default(false)
-  clientName String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  startTime String
+  endTime   String
+  isBooked  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   employee   User @relation(fields: [employeeId], references: [id])
   employeeId Int
 
-  // Um serviço mais longo que a grade ocupa vários slots consecutivos, então
-  // o lado "muitos" da reserva é a Availability.
   booking   Booking? @relation(fields: [bookingId], references: [id])
   bookingId Int?
 
@@ -125,6 +127,11 @@ model Booking {
   clientName  String
   clientPhone String
   clientEmail String?
+
+  // @default existe só pra migration rodar limpa em cima de reservas já
+  // existentes (todas vieram do site). O código sempre passa o valor à mão —
+  // nenhum caminho de criação depende do default.
+  source BookingSource @default(ONLINE)
 
   service   Service @relation(fields: [serviceId], references: [id])
   serviceId Int

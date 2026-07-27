@@ -1,7 +1,6 @@
 import { Role } from "@prisma/client";
 import { FastifyInstance } from "fastify";
 import {
-  createAvailability,
   deleteAvailability,
   generateAvailabilities,
   listAvailabilities,
@@ -24,8 +23,6 @@ const availabilityBodySchema = {
       date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
       startTime: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
       endTime: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
-      // null é aceito de propósito: é como o PUT limpa um encaixe manual
-      clientName: { type: ["string", "null"], maxLength: 80 },
     },
   },
 };
@@ -78,15 +75,6 @@ const availabilityParamsSchema = {
 };
 
 export async function availabilityRoutes(app: FastifyInstance): Promise<void> {
-  app.post<{ Body: AvailabilityBody }>(
-    "/availabilities",
-    {
-      schema: availabilityBodySchema,
-      preHandler: [authenticate, requireActiveSubscription, authorize(Role.EMPLOYEE)],
-    },
-    createAvailability,
-  );
-
   app.get<{ Querystring: ListAvailabilitiesQuery }>(
     "/availabilities",
     {

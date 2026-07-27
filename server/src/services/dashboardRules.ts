@@ -7,19 +7,18 @@ export interface PriceLike {
 }
 
 // Uma Availability da janela, já com o booking (quando existe) resolvido.
-// booking null + isBooked true = encaixe manual do colaborador.
 export interface SlotRow {
   id: number;
   date: Date;
   startTime: string;
   endTime: string;
   isBooked: boolean;
-  clientName: string | null;
   employeeId: number;
   booking: {
     id: number;
     clientName: string;
     clientPhone: string;
+    source: "ONLINE" | "INTERNAL";
     service: { id: number; name: string; price: PriceLike };
   } | null;
 }
@@ -55,7 +54,7 @@ export interface CatalogServiceRow {
 
 export interface DashboardKpis {
   occupancy: { rate: number; booked: number; total: number };
-  bookings: { total: number; online: number; manual: number };
+  bookings: { total: number; online: number; internal: number };
   revenue: { scheduled: string; averageTicket: string };
   pace: { current: number; previous: number };
 }
@@ -78,11 +77,11 @@ export function buildKpis(
 ): DashboardKpis {
   const total = slots.length;
   const bookedSlots = slots.filter((slot) => slot.isBooked);
-  const online = distinctBookings(bookedSlots);
-  // Encaixe manual não tem booking, então cada slot anotado é um atendimento.
-  const manual = bookedSlots.filter((slot) => slot.booking === null).length;
+  const bookings = distinctBookings(bookedSlots);
+  const online = bookings.filter((booking) => booking.source === "ONLINE").length;
+  const internal = bookings.filter((booking) => booking.source === "INTERNAL").length;
 
-  const revenueCents = online.reduce(
+  const revenueCents = bookings.reduce(
     (sum, booking) => sum + toCents(booking.service.price),
     0,
   );
@@ -94,16 +93,16 @@ export function buildKpis(
       total,
     },
     bookings: {
-      total: online.length + manual,
-      online: online.length,
-      manual,
+      total: bookings.length,
+      online,
+      internal,
     },
     revenue: {
       scheduled: formatCents(revenueCents),
       averageTicket:
-        online.length === 0
+        bookings.length === 0
           ? "0.00"
-          : formatCents(Math.round(revenueCents / online.length)),
+          : formatCents(Math.round(revenueCents / bookings.length)),
     },
     pace,
   };
@@ -305,7 +304,6 @@ export interface UpcomingSlotRow {
   date: Date;
   startTime: string;
   endTime: string;
-  clientName: string | null;
   employee: { name: string };
   booking: {
     id: number;
@@ -385,8 +383,7 @@ export function buildUpcoming(
       date: row.date.toISOString().slice(0, 10),
       startTime: row.startTime,
       endTime: row.endTime,
-      // Booking manda no nome: é o cliente que de fato reservou.
-      clientName: row.booking?.clientName ?? row.clientName ?? "Cliente",
+      clientName: row.booking?.clientName ?? "Cliente",
       clientPhone: row.booking?.clientPhone ?? null,
       serviceName: row.booking?.service.name ?? null,
       employeeName: row.employee.name,

@@ -8,15 +8,16 @@ const slotSelect = {
   startTime: true,
   endTime: true,
   isBooked: true,
-  clientName: true,
   employeeId: true,
   booking: {
     // O id é o que permite agrupar os slots de um serviço longo numa reserva
-    // só — sem ele, receita e contagem saem dobradas.
+    // só — sem ele, receita e contagem saem dobradas. source distingue
+    // reserva do site de reserva feita pela atendente no painel.
     select: {
       id: true,
       clientName: true,
       clientPhone: true,
+      source: true,
       service: { select: { id: true, name: true, price: true } },
     },
   },
@@ -42,7 +43,6 @@ export const dashboardRepository = {
         date: true,
         startTime: true,
         endTime: true,
-        clientName: true,
         employee: { select: { name: true } },
         booking: {
           select: {

@@ -141,6 +141,7 @@ export const publicBookingService = {
         clientName,
         clientPhone: input.clientPhone.trim(),
         clientEmail: input.clientEmail?.trim() || null,
+        source: "ONLINE",
       },
     );
     if (!booking) {
