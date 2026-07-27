@@ -13,6 +13,7 @@ import {
 } from "../controllers/employeeController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
+import { requireActiveSubscription } from "../middlewares/requireActiveSubscription";
 
 const createEmployeeSchema = {
   body: {
@@ -65,14 +66,14 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     "/employees",
     {
       schema: createEmployeeSchema,
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     createEmployee,
   );
 
   app.get(
     "/employees",
-    { preHandler: [authenticate, authorize(Role.ADMIN, Role.EMPLOYEE)] },
+    { preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN, Role.EMPLOYEE)] },
     listEmployees,
   );
 
@@ -80,7 +81,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     "/employees/:id",
     {
       schema: employeeParamsSchema,
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     deleteEmployee,
   );
@@ -89,7 +90,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     "/employees/:id/services",
     {
       schema: linkServiceSchema,
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     linkService,
   );
@@ -98,7 +99,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     "/employees/:id/services/:serviceId",
     {
       schema: unlinkServiceParamsSchema,
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     unlinkService,
   );

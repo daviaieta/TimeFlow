@@ -3,6 +3,7 @@ import { FastifyInstance } from "fastify";
 import { getOverview, OverviewQuery } from "../controllers/dashboardController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
+import { requireActiveSubscription } from "../middlewares/requireActiveSubscription";
 
 const overviewSchema = {
   querystring: {
@@ -20,7 +21,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     "/dashboard/overview",
     {
       schema: overviewSchema,
-      preHandler: [authenticate, authorize(Role.ADMIN)],
+      preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     getOverview,
   );
