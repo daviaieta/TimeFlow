@@ -3,7 +3,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  Add01Icon,
   Calendar03Icon,
   CheckmarkCircle02Icon,
   Delete02Icon,
@@ -32,8 +31,16 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Availability } from "@/lib/types";
+import { Availability, Employee } from "@/lib/types";
 import { formatBusinessName } from "@/lib/businessName";
 import { estimateGeneratedSlots } from "@/lib/generatePlan";
 import {
@@ -61,6 +68,11 @@ function formatDate(isoDate: string): string {
 export default function SchedulePage() {
   const user = useAuthUser();
 
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
+    user.role === "EMPLOYEE" ? user.id : null,
+  );
+
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -72,7 +84,6 @@ export default function SchedulePage() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [clientName, setClientName] = useState("");
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -98,13 +109,15 @@ export default function SchedulePage() {
   const [deletingSubmitting, setDeletingSubmitting] = useState(false);
 
   const loadAvailabilities = useCallback(() => {
+    if (selectedEmployeeId === null) return Promise.resolve();
+
     return fetchAdapter<{
       availabilities: Availability[];
       page: number;
       totalPages: number;
     }>({
       method: "GET",
-      path: `/availabilities?tab=${tab}&page=${page}`,
+      path: `/availabilities?employeeId=${selectedEmployeeId}&tab=${tab}&page=${page}`,
     })
       .then(({ data }) => {
         setAvailabilities(data.availabilities);
@@ -121,35 +134,27 @@ export default function SchedulePage() {
       .finally(() => {
         setLoading(false);
       });
-  }, [tab, page]);
+  }, [selectedEmployeeId, tab, page]);
 
   useEffect(() => {
     loadAvailabilities();
   }, [loadAvailabilities]);
 
-  if (user.role !== "EMPLOYEE") {
-    return (
-      <div className="mx-auto w-full max-w-5xl">
-        <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
-          A agenda de horários é gerenciada por cada colaborador.
-        </p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    fetchAdapter<{ employees: Employee[] }>({ method: "GET", path: "/employees" })
+      .then(({ data }) => {
+        setEmployees(data.employees);
+        setSelectedEmployeeId((current) => current ?? data.employees[0]?.id ?? null);
+      })
+      .catch(() => {
+        // Lista de funcionários é só pro seletor — se falhar, a tela já
+        // mostra o erro de carregar a agenda em seguida.
+      });
+  }, []);
 
   function selectTab(next: "upcoming" | "past") {
     setTab(next);
     setPage(1);
-  }
-
-  function openCreate() {
-    setEditing(null);
-    setDate("");
-    setStartTime("");
-    setEndTime("");
-    setClientName("");
-    setFormError(null);
-    setDialogOpen(true);
   }
 
   function openEdit(availability: Availability) {
@@ -157,7 +162,6 @@ export default function SchedulePage() {
     setDate(availability.date.slice(0, 10));
     setStartTime(availability.startTime);
     setEndTime(availability.endTime);
-    setClientName(availability.clientName ?? "");
     setFormError(null);
     setDialogOpen(true);
   }
@@ -167,18 +171,14 @@ export default function SchedulePage() {
     setFormError(null);
     setSubmitting(true);
 
-    const body = { date, startTime, endTime, clientName: clientName.trim() || null };
+    const body = { date, startTime, endTime };
 
     try {
-      if (editing) {
-        await fetchAdapter({
-          method: "PUT",
-          path: `/availabilities/${editing.id}`,
-          body,
-        });
-      } else {
-        await fetchAdapter({ method: "POST", path: "/availabilities", body });
-      }
+      await fetchAdapter({
+        method: "PUT",
+        path: `/availabilities/${editing?.id}`,
+        body,
+      });
       setDialogOpen(false);
       await loadAvailabilities();
     } catch (err) {
@@ -259,6 +259,7 @@ export default function SchedulePage() {
 
   const todayKey = localDayKey(new Date());
   const dayGroups = orderDayGroups(groupByDate(availabilities), tab);
+  const isOwnAgenda = selectedEmployeeId === user.id;
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -274,15 +275,30 @@ export default function SchedulePage() {
             Gerencie seus horários disponíveis para agendamento.
           </p>
         </div>
+        <Select
+          value={selectedEmployeeId ? String(selectedEmployeeId) : ""}
+          onValueChange={(value) => setSelectedEmployeeId(Number(value))}
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Escolha um colaborador" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {employees.map((employee) => (
+                <SelectItem key={employee.id} value={String(employee.id)}>
+                  {employee.id === user.id ? "Eu" : employee.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <div className="flex shrink-0 gap-2">
-          <Button variant="outline" onClick={openGenerate}>
-            <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
-            Gerar horários
-          </Button>
-          <Button onClick={openCreate}>
-            <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
-            Novo horário
-          </Button>
+          {isOwnAgenda && (
+            <Button variant="outline" onClick={openGenerate}>
+              <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
+              Gerar horários
+            </Button>
+          )}
         </div>
       </div>
 
@@ -392,7 +408,7 @@ export default function SchedulePage() {
 
                               {slot.isBooked ? (
                                 <Badge>Reservado</Badge>
-                              ) : (
+                              ) : isOwnAgenda ? (
                                 <div className="flex shrink-0 gap-1">
                                   <Button
                                     variant="ghost"
@@ -414,7 +430,7 @@ export default function SchedulePage() {
                                     <HugeiconsIcon icon={Delete02Icon} />
                                   </Button>
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -455,7 +471,7 @@ export default function SchedulePage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? "Editar horário" : "Novo horário"}</DialogTitle>
+            <DialogTitle>Editar horário</DialogTitle>
             <DialogDescription>
               Defina o dia e o intervalo em que você está disponível.
             </DialogDescription>
@@ -494,19 +510,6 @@ export default function SchedulePage() {
                   />
                 </Field>
               </div>
-              <Field>
-                <FieldLabel htmlFor="slot-client">Cliente (opcional)</FieldLabel>
-                <Input
-                  id="slot-client"
-                  value={clientName}
-                  onChange={(event) => setClientName(event.target.value)}
-                  placeholder="Nome de quem vai ocupar o horário"
-                  maxLength={80}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Deixe vazio para manter o horário livre para agendamento.
-                </p>
-              </Field>
               {formError && <FieldError>{formError}</FieldError>}
               <DialogFooter>
                 <Button
