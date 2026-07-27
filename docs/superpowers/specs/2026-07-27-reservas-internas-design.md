@@ -31,6 +31,19 @@ via "Gerar horários"). Não existe reserva em horário arbitrário fora da grad
 
 ## Backend
 
+### Schema: origem da reserva
+
+O dashboard mostra hoje "X pelo site · Y encaixes" (`kpi-cards.tsx`), calculado
+a partir de "tem `Booking` = online, não tem `Booking` = encaixe manual". Com o
+encaixe manual removido, toda reserva vira um `Booking` de verdade — essa
+distinção por presença de `Booking` deixa de existir. Pra manter o hint com
+sentido, `Booking` ganha uma coluna `source` (`enum BookingSource { ONLINE INTERNAL }`):
+`ONLINE` quando criado pelo fluxo público (`publicBookingService`), `INTERNAL`
+quando criado pela Reserva Interna (`internalBookingService`). A coluna tem
+`@default(ONLINE)` só pra migration rodar limpa em cima de reservas já
+existentes (todas vieram do site); no código, os dois serviços sempre passam
+o valor explicitamente — nenhum caminho de criação depende do default.
+
 ### Regras compartilhadas
 
 `isSlotUpcoming`, `slotRunForDuration`, `slotsFittingDuration` saem de
@@ -72,10 +85,25 @@ Arquivo novo `bookingRoutes.ts` (mesmo padrão de separação já usado entre
 - Remove `clientName` do schema do `PUT /availabilities/:id`, de
   `AvailabilityInput`/`AvailabilityData`/`buildAvailabilityData` — o dialog de
   editar fica só com data/início/fim.
-- Simplifica `toAvailabilityDto`: `clientName` só vem de `booking?.clientName`;
-  `locked` vira sinônimo de `isBooked` (não existe mais "ocupado sem Booking").
-- Remove os testes que cobrem o encaixe manual em `availabilityService.test.ts`
-  e `availabilityRules.test.ts`.
+- Simplifica `toAvailabilityDto`: `clientName` só vem de `booking?.clientName`.
+  O campo `locked` é removido do DTO e do tipo `Availability` do front — não
+  existe mais "ocupado sem Booking", então `isBooked` sozinho já diz tudo que
+  `locked` dizia.
+- Remove os testes que cobrem o encaixe manual em `availabilityRules.test.ts`.
+
+## Dashboard (`dashboardRules.ts`)
+
+- O hint "X pelo site · Y encaixes" muda pra "X pelo site · Y por atendente",
+  lido a partir de `Booking.source` em vez de "tem Booking ou não".
+- `rankServices` e a receita de `rankTeam`/`buildKpis` hoje ignoram encaixe
+  manual (sem `Booking`, sem `serviceId`, não entram no ranking por serviço).
+  Reserva interna tem `Booking` e `serviceId` reais — passa a contar em
+  receita e ranking de serviço normalmente, os dois canais juntos. É a
+  correção esperada: um corte feito por encaixe interno é receita real do
+  negócio, só não existe hoje porque o encaixe manual nunca teve serviço
+  associado.
+- `buildUpcoming`: `row.clientName` (encaixe manual) deixa de ser fallback de
+  nome — toda linha reservada tem `booking.clientName`.
 
 ## Frontend (`/dashboard/schedule`)
 
