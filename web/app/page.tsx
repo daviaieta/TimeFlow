@@ -52,6 +52,8 @@ const plans = [
   {
     name: "Essencial",
     description: "Para autônomos começando a organizar a agenda.",
+    price: "R$ 49,90",
+    priceSuffix: "/mês",
     features: [
       "1 profissional",
       "Página pública de agendamento",
@@ -63,6 +65,8 @@ const plans = [
   {
     name: "Profissional",
     description: "Para negócios com equipe pequena.",
+    price: "R$ 89,90",
+    priceSuffix: "/mês",
     features: [
       "Até 5 profissionais",
       "Tudo do Essencial",
@@ -74,6 +78,8 @@ const plans = [
   {
     name: "Equipe",
     description: "Para operações maiores, com várias unidades.",
+    price: "R$ 179,90",
+    priceSuffix: "/mês",
     features: [
       "Profissionais ilimitados",
       "Tudo do Profissional",
@@ -251,8 +257,8 @@ export default function Home() {
               Um plano para cada fase do seu negócio
             </h2>
             <p className="mt-3 text-muted-foreground">
-              Os valores ainda estão sendo definidos e serão divulgados em
-              breve.
+              Preço calculado a partir do custo real de operação, com margem
+              sustentável — sem surpresa depois.
             </p>
           </div>
 
@@ -276,10 +282,10 @@ export default function Home() {
                   {plan.description}
                 </p>
                 <p className="mt-6 text-3xl font-semibold tracking-tight">
-                  A definir
+                  {plan.price}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  valor divulgado em breve
+                  {plan.priceSuffix}
                 </p>
                 <ul className="mt-6 flex-1 space-y-3 text-sm">
                   {plan.features.map((feature) => (
