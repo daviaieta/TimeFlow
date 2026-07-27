@@ -2,12 +2,24 @@ const TOKEN_KEY = "token";
 
 export type Role = "SUPERADMIN" | "ADMIN" | "EMPLOYEE";
 
+export type PlanName = "ESSENCIAL" | "PROFISSIONAL" | "EQUIPE";
+export type SubscriptionStatus = "PENDING" | "ACTIVE" | "PAST_DUE" | "CANCELED";
+
 export interface AuthUser {
   id: number;
   name: string;
   email: string;
   role: Role;
-  business: { id: number; name: string; slug: string; address: string | null } | null;
+  business:
+    | {
+        id: number;
+        name: string;
+        slug: string;
+        address: string | null;
+        planName: PlanName | null;
+        subscriptionStatus: SubscriptionStatus;
+      }
+    | null;
 }
 
 export function getToken(): string | null {

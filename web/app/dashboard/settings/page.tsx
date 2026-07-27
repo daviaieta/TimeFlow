@@ -1,5 +1,6 @@
 "use client";
 
+import { BillingCard } from "./billing-card";
 import { BusinessCard } from "./business-card";
 import { PasswordCard } from "./password-card";
 import { ProfileCard } from "./profile-card";
@@ -22,7 +23,14 @@ export default function SettingsPage() {
         <ProfileCard key={user.email} user={user} />
         <PasswordCard />
         {user.role === "ADMIN" && user.business ? (
-          <BusinessCard business={user.business} />
+          <>
+            <BillingCard
+              businessId={user.business.id}
+              planName={user.business.planName}
+              subscriptionStatus={user.business.subscriptionStatus}
+            />
+            <BusinessCard business={user.business} />
+          </>
         ) : null}
       </div>
     </div>
