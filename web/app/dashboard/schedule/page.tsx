@@ -108,6 +108,14 @@ export default function SchedulePage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingSubmitting, setDeletingSubmitting] = useState(false);
 
+  const [bookingSlot, setBookingSlot] = useState<Availability | null>(null);
+  const [bookingServiceId, setBookingServiceId] = useState("");
+  const [bookingClientName, setBookingClientName] = useState("");
+  const [bookingClientPhone, setBookingClientPhone] = useState("");
+  const [bookingClientEmail, setBookingClientEmail] = useState("");
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+
   const loadAvailabilities = useCallback(() => {
     if (selectedEmployeeId === null) {
       // Ainda não há colaborador selecionado (ex.: negócio sem nenhum
@@ -264,9 +272,48 @@ export default function SchedulePage() {
     }
   }
 
+  function openBooking(slot: Availability) {
+    setBookingSlot(slot);
+    setBookingServiceId("");
+    setBookingClientName("");
+    setBookingClientPhone("");
+    setBookingClientEmail("");
+    setBookingError(null);
+  }
+
+  async function handleBookingSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!bookingSlot) return;
+
+    setBookingError(null);
+    setBookingSubmitting(true);
+
+    try {
+      await fetchAdapter({
+        method: "POST",
+        path: "/bookings",
+        body: {
+          availabilityId: bookingSlot.id,
+          serviceId: Number(bookingServiceId),
+          clientName: bookingClientName.trim(),
+          clientPhone: bookingClientPhone.trim(),
+          ...(bookingClientEmail.trim() ? { clientEmail: bookingClientEmail.trim() } : {}),
+        },
+      });
+      setBookingSlot(null);
+      await loadAvailabilities();
+    } catch (err) {
+      setBookingError(err instanceof ApiError ? err.message : "Erro inesperado.");
+    } finally {
+      setBookingSubmitting(false);
+    }
+  }
+
   const todayKey = localDayKey(new Date());
   const dayGroups = orderDayGroups(groupByDate(availabilities), tab);
   const isOwnAgenda = selectedEmployeeId === user.id;
+  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId);
+  const bookableServices = selectedEmployee?.services ?? [];
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -421,29 +468,40 @@ export default function SchedulePage() {
 
                               {slot.isBooked ? (
                                 <Badge>Reservado</Badge>
-                              ) : isOwnAgenda ? (
+                              ) : (
                                 <div className="flex shrink-0 gap-1">
                                   <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label="Editar horário"
-                                    onClick={() => openEdit(slot)}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openBooking(slot)}
                                   >
-                                    <HugeiconsIcon icon={PencilEdit02Icon} />
+                                    Reservar
                                   </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label="Excluir horário"
-                                    onClick={() => {
-                                      setDeleteError(null);
-                                      setDeleting(slot);
-                                    }}
-                                  >
-                                    <HugeiconsIcon icon={Delete02Icon} />
-                                  </Button>
+                                  {isOwnAgenda && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label="Editar horário"
+                                        onClick={() => openEdit(slot)}
+                                      >
+                                        <HugeiconsIcon icon={PencilEdit02Icon} />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label="Excluir horário"
+                                        onClick={() => {
+                                          setDeleteError(null);
+                                          setDeleting(slot);
+                                        }}
+                                      >
+                                        <HugeiconsIcon icon={Delete02Icon} />
+                                      </Button>
+                                    </>
+                                  )}
                                 </div>
-                              ) : null}
+                              )}
                             </div>
                           </div>
                         </div>
@@ -797,6 +855,88 @@ export default function SchedulePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={bookingSlot !== null} onOpenChange={(open) => !open && setBookingSlot(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reservar horário</DialogTitle>
+            <DialogDescription>
+              {bookingSlot &&
+                `${formatDate(bookingSlot.date.slice(0, 10))} · ${bookingSlot.startTime}`}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBookingSubmit}>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="booking-service">Serviço</FieldLabel>
+                <Select
+                  value={bookingServiceId}
+                  onValueChange={(value) => setBookingServiceId(value ?? "")}
+                >
+                  <SelectTrigger id="booking-service">
+                    <SelectValue placeholder="Escolha o serviço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {bookableServices.map((service) => (
+                        <SelectItem key={service.id} value={String(service.id)}>
+                          {service.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="booking-name">Nome do cliente</FieldLabel>
+                <Input
+                  id="booking-name"
+                  value={bookingClientName}
+                  onChange={(event) => setBookingClientName(event.target.value)}
+                  maxLength={80}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="booking-phone">Telefone</FieldLabel>
+                <Input
+                  id="booking-phone"
+                  value={bookingClientPhone}
+                  onChange={(event) => setBookingClientPhone(event.target.value)}
+                  maxLength={20}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="booking-email">Email (opcional)</FieldLabel>
+                <Input
+                  id="booking-email"
+                  type="email"
+                  value={bookingClientEmail}
+                  onChange={(event) => setBookingClientEmail(event.target.value)}
+                  maxLength={120}
+                />
+              </Field>
+              {bookingError && <FieldError>{bookingError}</FieldError>}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setBookingSlot(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={bookingSubmitting || !bookingServiceId}>
+                  {bookingSubmitting ? (
+                    <>
+                      <Spinner data-icon="inline-start" />
+                      Reservando…
+                    </>
+                  ) : (
+                    "Reservar"
+                  )}
+                </Button>
+              </DialogFooter>
+            </FieldGroup>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
