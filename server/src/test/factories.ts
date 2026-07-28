@@ -80,11 +80,21 @@ export async function createSlots(employeeId: number, startTimes: string[], date
 
 // Um negócio completo e pronto para receber reservas: ADMIN, EMPLOYEE,
 // serviço vinculado ao EMPLOYEE e a grade de horários pedida.
+interface SeedOptions {
+  duration?: number;
+  startTimes?: string[];
+  subscriptionStatus?: SubscriptionStatus;
+}
+
 export async function seedBookableBusiness(
   slug: string,
-  { duration = 30, startTimes = ["09:00"] } = {},
+  {
+    duration = 30,
+    startTimes = ["09:00"],
+    subscriptionStatus = SubscriptionStatus.ACTIVE,
+  }: SeedOptions = {},
 ) {
-  const business = await createBusiness({ slug });
+  const business = await createBusiness({ slug, subscriptionStatus });
   const admin = await createUser(business.id, Role.ADMIN, `admin@${slug}.test`);
   const employee = await createUser(business.id, Role.EMPLOYEE, `employee@${slug}.test`);
   const service = await createService(business.id, { duration });

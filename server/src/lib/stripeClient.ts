@@ -2,7 +2,23 @@ import Stripe from "stripe";
 import { PlanName } from "@prisma/client";
 import { env } from "../config/env";
 
-const stripe = new Stripe(env.stripeSecretKey);
+// Construído sob demanda, não no import: com a cobrança desligada não há
+// chave configurada, e criar o cliente no topo derrubaria o servidor inteiro
+// por causa de um serviço que ninguém vai chamar.
+let client: Stripe | null = null;
+
+function stripe(): Stripe {
+  if (!client) {
+    if (!env.stripeSecretKey) {
+      throw new Error(
+        "STRIPE_SECRET_KEY não configurada. Com BILLING_ENABLED=false as rotas de cobrança nem sobem — se esta linha executou, alguma delas escapou do guard.",
+      );
+    }
+    client = new Stripe(env.stripeSecretKey);
+  }
+
+  return client;
+}
 
 interface CreateCheckoutSessionInput {
   customerId: string;
@@ -16,7 +32,7 @@ interface CreateCheckoutSessionInput {
 
 export const stripeClient = {
   createCustomer(input: { name: string; email: string; businessId: number }) {
-    return stripe.customers.create({
+    return stripe().customers.create({
       name: input.name,
       email: input.email,
       metadata: { businessId: String(input.businessId) },
@@ -27,7 +43,7 @@ export const stripeClient = {
   // billingRules.planPriceInCents como única fonte dos preços, os mesmos que
   // a landing publica.
   createCheckoutSession(input: CreateCheckoutSessionInput) {
-    return stripe.checkout.sessions.create({
+    return stripe().checkout.sessions.create({
       mode: "subscription",
       customer: input.customerId,
       client_reference_id: String(input.businessId),
@@ -55,13 +71,13 @@ export const stripeClient = {
   },
 
   retrieveCheckoutSession(sessionId: string) {
-    return stripe.checkout.sessions.retrieve(sessionId);
+    return stripe().checkout.sessions.retrieve(sessionId);
   },
 
   // Verificação de assinatura do webhook: HMAC em tempo constante + janela de
   // tolerância de timestamp. Feita pelo SDK de propósito — é criptografia
   // sensível, hand-rolled aqui seria risco sem ganho.
   constructWebhookEvent(rawBody: Buffer, signature: string): Stripe.Event {
-    return stripe.webhooks.constructEvent(rawBody, signature, env.stripeWebhookSecret);
+    return stripe().webhooks.constructEvent(rawBody, signature, env.stripeWebhookSecret);
   },
 };

@@ -13,7 +13,7 @@ import { ensureTestSchema, resetDatabase, testPrisma } from "./testDb";
 let app: FastifyInstance;
 
 before(async () => {
-  ensureTestSchema();
+  await ensureTestSchema();
   app = buildApp();
   await app.ready();
 });

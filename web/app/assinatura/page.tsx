@@ -44,11 +44,19 @@ function SubscriptionPage() {
       setUser(loadedUser);
     }
 
-    return fetchAdapter<{ user: AuthUser }>({
+    return fetchAdapter<{ user: AuthUser; billingEnabled: boolean }>({
       method: "GET",
       path: "/auth/me",
     })
       .then(({ data }) => {
+        // Com a cobrança desligada as rotas de checkout nem existem no
+        // servidor: mostrar a grade de planos aqui só levaria a um erro no
+        // clique.
+        if (!data.billingEnabled) {
+          router.replace("/dashboard");
+          return;
+        }
+
         // Voltando do Stripe: pergunta ao servidor (que pergunta ao Stripe) se a
         // sessão foi paga. É isto que faz o fluxo fechar sem webhook em dev.
         if (sessionId && data.user.business) {

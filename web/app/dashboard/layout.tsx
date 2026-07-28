@@ -76,6 +76,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [billingEnabled, setBillingEnabled] = useState(true);
 
   const loadUser = useCallback(() => {
     const token = getToken();
@@ -84,8 +85,14 @@ export default function DashboardLayout({
       return Promise.resolve();
     }
 
-    return fetchAdapter<{ user: AuthUser }>({ method: "GET", path: "/auth/me" })
-      .then(({ data }) => setUser(data.user))
+    return fetchAdapter<{ user: AuthUser; billingEnabled: boolean }>({
+      method: "GET",
+      path: "/auth/me",
+    })
+      .then(({ data }) => {
+        setUser(data.user);
+        setBillingEnabled(data.billingEnabled);
+      })
       .catch(() => {
         clearToken();
         router.replace("/login");
@@ -97,10 +104,12 @@ export default function DashboardLayout({
   }, [loadUser]);
 
   // Sem assinatura ativa não há nada de útil no dashboard: manda para a
-  // página de assinatura, que é cheia e não tem sidebar. Sem trial: bloqueia
-  // desde a criação do negócio, não só depois de um período gratuito.
+  // página de assinatura, que é cheia e não tem sidebar. Com a cobrança
+  // desligada no servidor, ninguém é mandado para lá — o negócio segue
+  // PENDING no banco e usa o painel inteiro.
   useEffect(() => {
     if (
+      billingEnabled &&
       user &&
       user.role !== "SUPERADMIN" &&
       user.business &&
@@ -108,13 +117,13 @@ export default function DashboardLayout({
     ) {
       router.replace("/assinatura");
     }
-  }, [user, router]);
+  }, [billingEnabled, user, router]);
 
   // O contexto precisa de identidade estável: recriar o objeto a cada render
   // faria toda tela consumidora re-renderizar sem motivo.
   const contextValue = useMemo(
-    () => (user ? { user, refresh: loadUser } : null),
-    [user, loadUser],
+    () => (user ? { user, billingEnabled, refresh: loadUser } : null),
+    [user, billingEnabled, loadUser],
   );
 
   function handleLogout() {

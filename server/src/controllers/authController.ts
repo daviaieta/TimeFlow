@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { User } from "@prisma/client";
+import { env } from "../config/env";
 import { accountService } from "../services/accountService";
 import { authService } from "../services/authService";
 
@@ -62,7 +63,11 @@ export async function me(
 ): Promise<void> {
   const user = await authService.getProfile(request.user.sub);
 
-  reply.send({ user });
+  // O front precisa saber se a cobrança está valendo para não empurrar
+  // ninguém para a tela de assinatura durante o período de cortesia. Vem do
+  // servidor, e não de uma variável do front, para não existirem duas fontes
+  // de verdade que podem discordar.
+  reply.send({ user, billingEnabled: env.billingEnabled });
 }
 
 export async function updateMe(
