@@ -37,3 +37,17 @@ export interface Availability {
   // slots de 30min de um corte de 1h num evento só.
   booking: BookingSummary | null;
 }
+
+export type ContactStatus = "NEW" | "READ" | "ARCHIVED";
+
+export interface ContactMessage {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  businessName: string | null;
+  teamSize: string | null;
+  message: string;
+  status: ContactStatus;
+  createdAt: string; // ISO string vinda da API
+}

@@ -8,6 +8,7 @@ import {
   Calendar03Icon,
   DashboardSquare01Icon,
   Logout03Icon,
+  Mail01Icon,
   Scissor01Icon,
   Settings02Icon,
   UserGroupIcon,
@@ -48,6 +49,12 @@ const navItems: {
     href: "/dashboard/schedule",
     icon: Calendar03Icon,
     roles: ["EMPLOYEE", "ADMIN"],
+  },
+  {
+    label: "Contatos",
+    href: "/dashboard/contatos",
+    icon: Mail01Icon,
+    roles: ["SUPERADMIN"],
   },
   {
     label: "Configurações",
