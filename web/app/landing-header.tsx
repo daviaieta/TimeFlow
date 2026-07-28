@@ -9,6 +9,7 @@ const navLinks = [
   { label: "Produto", href: "#produto" },
   { label: "Recursos", href: "#recursos" },
   { label: "Preços", href: "#precos" },
+  { label: "Contato", href: "/contato" },
 ];
 
 export function LandingHeader() {
