@@ -179,7 +179,9 @@ export default function TeamPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <div className="flex items-center justify-between">
+      {/* Empilha no celular: lado a lado, "Convidar colaborador" espremeria o
+          título até ele quebrar em três linhas. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Equipe</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -189,7 +191,7 @@ export default function TeamPage() {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={openInvite}>
+          <Button className="w-full sm:w-auto" onClick={openInvite}>
             <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
             Convidar colaborador
           </Button>

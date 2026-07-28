@@ -130,6 +130,8 @@ export default function DashboardLayout({
     );
   }
 
+  const visibleNav = navItems.filter((item) => item.roles.includes(user.role));
+
   return (
     <AuthUserProvider value={contextValue}>
       <div className="flex flex-1 bg-zinc-50 dark:bg-background">
@@ -139,28 +141,23 @@ export default function DashboardLayout({
           </Link>
 
           <nav className="mt-8 flex flex-col gap-1">
-            {navItems
-              .filter((item) => item.roles.includes(user.role))
-              .map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      active
-                        ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    <HugeiconsIcon
-                      icon={item.icon}
-                      className="size-4 shrink-0"
-                    />
-                    {item.label}
-                  </Link>
-                );
-              })}
+            {visibleNav.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <HugeiconsIcon icon={item.icon} className="size-4 shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="mt-auto border-t pt-4">
@@ -172,7 +169,7 @@ export default function DashboardLayout({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center justify-between border-b bg-card px-6">
+          <header className="flex h-16 items-center justify-between gap-3 border-b bg-card px-4 sm:px-6">
             {user.business ? (
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0">
@@ -193,8 +190,46 @@ export default function DashboardLayout({
             </Button>
           </header>
 
-          <main className="flex-1 px-6 py-8">{children}</main>
+          {/* pb-24 no mobile: a barra de navegação é fixa e cobriria o fim da
+              página, incluindo o último botão de qualquer formulário. */}
+          <main className="flex-1 px-4 pt-6 pb-24 sm:px-6 sm:pt-8 sm:pb-8">
+            {children}
+          </main>
         </div>
+
+        {/* Abaixo de sm a sidebar some e, até aqui, sumia junto a única forma
+            de trocar de tela. Barra inferior em vez de menu sanfona: o dono do
+            negócio abre isto no balcão, com uma mão só. */}
+        <nav
+          aria-label="Navegação principal"
+          className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] sm:hidden"
+        >
+          <ul className="flex items-stretch">
+            {visibleNav.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <li key={item.href} className="flex-1">
+                  <Link
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    // O rótulo é o mesmo da sidebar de propósito: um destino
+                    // com dois nomes obriga a reaprender o painel no celular.
+                    // Daí o corpo menor e o tracking apertado — "Configurações"
+                    // precisa caber inteiro numa coluna de cinco.
+                    className={`flex h-16 flex-col items-center justify-center gap-1 px-0.5 text-center text-[10px] font-medium tracking-tight transition-colors ${
+                      active
+                        ? "text-indigo-700 dark:text-indigo-400"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    <HugeiconsIcon icon={item.icon} className="size-5 shrink-0" />
+                    <span className="w-full truncate">{item.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
       </div>
     </AuthUserProvider>
   );

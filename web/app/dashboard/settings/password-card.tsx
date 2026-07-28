@@ -98,7 +98,7 @@ export function PasswordCard() {
           ) : null}
 
           <Field>
-            <Button type="submit" disabled={submitting}>
+            <Button className="w-full sm:w-auto" type="submit" disabled={submitting}>
               {submitting ? <Spinner data-icon="inline-start" /> : null}
               {submitting ? "Salvando…" : "Trocar senha"}
             </Button>
