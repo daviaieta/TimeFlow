@@ -1,7 +1,9 @@
 import { BookingSource } from "@prisma/client";
 import { ConflictError, NotFoundError } from "../lib/errors";
+import { sendBookingConfirmationEmail } from "../lib/emails/bookingConfirmation";
 import { availabilityRepository } from "../repositories/availabilityRepository";
 import { bookingRepository } from "../repositories/bookingRepository";
+import { businessRepository } from "../repositories/businessRepository";
 import { employeeRepository } from "../repositories/employeeRepository";
 import { serviceRepository } from "../repositories/serviceRepository";
 import { isSlotUpcoming, normalizeClientName, slotRunForDuration } from "./bookingRules";
@@ -79,6 +81,29 @@ export async function createBookingForBusiness(
   );
   if (!booking) {
     throw new ConflictError("This time slot has just been booked");
+  }
+
+  // Aqui e não no chamador: os dois fluxos (público e interno) passam por este
+  // ponto, então a confirmação sai uma vez só, sem duplicar código.
+  if (booking.clientEmail) {
+    try {
+      const business = await businessRepository.findById(businessId);
+      await sendBookingConfirmationEmail({
+        to: booking.clientEmail,
+        clientName,
+        businessName: business?.name ?? "Time Flow",
+        businessAddress: business?.address ?? null,
+        serviceName: service.name,
+        employeeName: slot.employee.name,
+        date: slot.date,
+        startTime: slot.startTime,
+        durationMinutes: service.duration,
+      });
+    } catch (error) {
+      // A reserva já está no banco e o horário já foi travado: falha de e-mail
+      // não pode transformar uma reserva válida em erro para o cliente.
+      console.error(`Falha ao enviar confirmação para ${booking.clientEmail}:`, error);
+    }
   }
 
   return {
