@@ -12,8 +12,10 @@ não permite é revender a hospedagem.
 
 1. Netlify → **Add new site** → **Import an existing project** → GitHub →
    `daviaieta/TimeFlow`.
-2. Não mexa em build command nem publish directory: o `netlify.toml` da raiz
-   já define `base = "web"` e o Next.js Runtime resolve o resto.
+2. Não mexa em build command nem publish directory na UI: o `netlify.toml` da
+   raiz já define `base = "web"` e `publish = ".next"`. O `publish` é relativo
+   ao `base` — por isso `.next`, e não `web/.next`. Sem essa linha a Netlify
+   publica o código-fonte de `web/` e o site responde 404 em todas as rotas.
 3. Branch de produção: `main`.
 
 ## 2. Variáveis de ambiente (Netlify → Site configuration → Environment variables)

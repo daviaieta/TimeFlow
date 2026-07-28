@@ -5,10 +5,14 @@
 [build]
   base = "web"
   command = "npm run build"
-
-# O diretório de publicação não é declarado de propósito: o Next.js Runtime
-# da Netlify detecta o framework e resolve isso sozinho. Declarar à mão em
-# monorepo é a origem clássica do erro "web/web/.next".
+  # Relativo ao `base`, não à raiz do repositório — a doc da Netlify define o
+  # publish como "relative to the base directory". Portanto `.next`, e não
+  # `web/.next`, que viraria `web/web/.next`.
+  #
+  # Declarar é obrigatório: sem esta linha o default publica o próprio `base`,
+  # ou seja, o código-fonte de web/ sem nenhum index.html — o site sobe e
+  # responde 404 em tudo, que foi o que aconteceu no primeiro deploy.
+  publish = ".next"
 
 [build.environment]
   # Mesma linha do Node que a API usa no Railway. Sem pinar, um upgrade do
