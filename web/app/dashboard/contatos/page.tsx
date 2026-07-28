@@ -59,14 +59,19 @@ export default function ContatosPage() {
 
   function changeStatus(id: number, status: ContactStatus) {
     startTransition(async () => {
-      await fetchAdapter({
-        method: "PATCH",
-        path: `/contact-messages/${id}`,
-        body: { status },
-      }).catch((err) => {
+      // Recarrega só depois de a mutação dar certo: se o PATCH falhar, o
+      // catch define o erro e a recarga é pulada, senão o `load()` bem-
+      // sucedido apaga a mensagem de erro que acabamos de definir.
+      try {
+        await fetchAdapter({
+          method: "PATCH",
+          path: `/contact-messages/${id}`,
+          body: { status },
+        });
+        await load();
+      } catch (err) {
         setError(err instanceof ApiError ? err.message : "Erro inesperado.");
-      });
-      await load();
+      }
     });
   }
 
