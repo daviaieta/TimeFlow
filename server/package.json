@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc --project tsconfig.build.json",
-    "start": "node dist/server.js",
+    "start": "prisma migrate deploy && node dist/server.js",
     "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
@@ -40,13 +40,13 @@
     "bcrypt": "^6.0.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0",
+    "prisma": "^6.1.0",
     "resend": "^6.18.0",
     "stripe": "^22.3.2"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.10.2",
-    "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
