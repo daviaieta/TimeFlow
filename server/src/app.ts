@@ -10,6 +10,7 @@ import { authRoutes } from "./routes/authRoutes";
 import { billingRoutes, stripeWebhookRoutes } from "./routes/billingRoutes";
 import { bookingRoutes } from "./routes/bookingRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
+import { contactRoutes } from "./routes/contactRoutes";
 import { dashboardRoutes } from "./routes/dashboardRoutes";
 import { employeeRoutes } from "./routes/employeeRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
@@ -45,6 +46,7 @@ export function buildApp(): FastifyInstance {
   app.register(healthRoutes);
   app.register(authRoutes);
   app.register(businessRoutes);
+  app.register(contactRoutes);
   app.register(billingRoutes);
   app.register(stripeWebhookRoutes);
   app.register(dashboardRoutes);
