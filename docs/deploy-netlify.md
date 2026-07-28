@@ -13,9 +13,15 @@ não permite é revender a hospedagem.
 1. Netlify → **Add new site** → **Import an existing project** → GitHub →
    `daviaieta/TimeFlow`.
 2. Não mexa em build command nem publish directory na UI: o `netlify.toml` da
-   raiz já define `base = "web"` e `publish = ".next"`. O `publish` é relativo
-   ao `base` — por isso `.next`, e não `web/.next`. Sem essa linha a Netlify
-   publica o código-fonte de `web/` e o site responde 404 em todas as rotas.
+   raiz já define tudo. Duas linhas de lá não são opcionais, e as duas custaram
+   um deploy 404 cada até serem descobertas:
+   - `publish = ".next"` — o caminho é relativo ao `base`, por isso `.next` e
+     não `web/.next`. Sem a linha, o default publica o próprio `base`, ou seja
+     o código-fonte de `web/`, e toda rota responde 404.
+   - `[[plugins]] package = "@netlify/plugin-nextjs"` — a Netlify instala esse
+     adaptador sozinha *quando detecta Next.js*, mas a detecção do build
+     procura `package.json` na raiz do repositório, e esta raiz não tem
+     nenhum. Sem o adaptador o `.next` é servido como arquivo estático.
 3. Branch de produção: `main`.
 
 ## 2. Variáveis de ambiente (Netlify → Site configuration → Environment variables)
@@ -40,6 +46,29 @@ Sem o domínio da Netlify em `WEB_ORIGIN`, o navegador barra toda chamada à API
 por CORS e a tela fica em branco sem erro visível no servidor.
 
 ## 4. Conferir depois do primeiro deploy
+
+Dá para diagnosticar quase tudo de fora, sem abrir o painel:
+
+```sh
+SITE=https://timeflowbr.netlify.app
+API=https://api-production-a0ea.up.railway.app
+
+# 200 na raiz e 404 em /BUILD_ID é o esperado. /BUILD_ID respondendo 200
+# significa que o adaptador do Next não rodou e o .next virou site estático.
+curl -s -o /dev/null -w "%{http_code}\n" $SITE/
+curl -s -o /dev/null -w "%{http_code}\n" $SITE/BUILD_ID
+
+# Sem `access-control-allow-origin` na resposta, a origem não está em
+# WEB_ORIGIN e o navegador vai bloquear toda chamada à API.
+curl -s -D- -o /dev/null -H "Origin: $SITE" $API/health | grep -i access-control
+
+# Qual URL de API foi embutida no bundle. Se aparecer localhost, a variável
+# NEXT_PUBLIC_API_URL não estava setada na hora do build.
+curl -s $SITE/login | grep -oE '/_next/static/chunks/[a-zA-Z0-9._-]+\.js' | sort -u |
+  while read c; do curl -s "$SITE$c"; done | grep -o 'localhost:3333' | head -1
+```
+
+Depois, no navegador:
 
 - `/` carrega a landing.
 - `/login` autentica e cai no painel — prova que o CORS está certo.
