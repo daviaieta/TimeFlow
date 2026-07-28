@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { ContactBody, createContactMessage } from "../controllers/contactController";
 import {
   createPublicBooking,
   getPublicBusiness,
@@ -61,6 +62,25 @@ const bookingSchema = {
   },
 };
 
+// `website` é o honeypot: aceito no schema de propósito, para o bot receber
+// 201 e não descobrir que o campo o denunciou. A rejeição é na regra.
+const contactSchema = {
+  body: {
+    type: "object",
+    required: ["name", "email", "message"],
+    additionalProperties: false,
+    properties: {
+      name: { type: "string", minLength: 1, maxLength: 80 },
+      email: { type: "string", format: "email", maxLength: 120 },
+      phone: { type: "string", maxLength: 20 },
+      businessName: { type: "string", maxLength: 80 },
+      teamSize: { type: "string", enum: ["1", "2-5", "6+"] },
+      message: { type: "string", minLength: 1, maxLength: 2000 },
+      website: { type: "string", maxLength: 200 },
+    },
+  },
+};
+
 export async function publicRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: PublicBusinessParams }>(
     "/public/businesses/:slug",
@@ -78,5 +98,11 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
     "/public/businesses/:slug/bookings",
     { schema: bookingSchema },
     createPublicBooking,
+  );
+
+  app.post<{ Body: ContactBody }>(
+    "/public/contact",
+    { schema: contactSchema },
+    createContactMessage,
   );
 }
