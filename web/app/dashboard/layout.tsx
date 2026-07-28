@@ -47,7 +47,7 @@ const navItems: {
     label: "Agenda",
     href: "/dashboard/schedule",
     icon: Calendar03Icon,
-    roles: ["EMPLOYEE"],
+    roles: ["EMPLOYEE", "ADMIN"],
   },
   {
     label: "Configurações",

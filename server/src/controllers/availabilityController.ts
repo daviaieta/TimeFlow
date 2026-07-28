@@ -23,22 +23,18 @@ export interface GenerateAvailabilitiesBody {
 }
 
 export interface ListAvailabilitiesQuery {
-  tab?: "upcoming" | "past";
-  page?: number;
   employeeId?: number;
+  date?: string;
 }
 
 export async function listAvailabilities(
   request: FastifyRequest<{ Querystring: ListAvailabilitiesQuery }>,
   reply: FastifyReply,
 ): Promise<void> {
-  const tab = request.query.tab === "past" ? "past" : "upcoming";
-  const page = request.query.page ?? 1;
-
-  const result = await availabilityService.listAvailabilities(
+  const result = await availabilityService.listDay(
     request.user,
     request.query.employeeId,
-    { tab, page },
+    request.query.date,
     new Date(),
   );
 

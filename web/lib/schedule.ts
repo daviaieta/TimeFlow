@@ -1,5 +1,3 @@
-import type { Availability } from "./types";
-
 export function toMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
@@ -25,47 +23,10 @@ export function localDayKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function groupByDate(items: Availability[]): [string, Availability[]][] {
-  const groups = new Map<string, Availability[]>();
-
-  for (const item of items) {
-    const key = item.date.slice(0, 10);
-    const list = groups.get(key) ?? [];
-    list.push(item);
-    groups.set(key, list);
-  }
-
-  return [...groups.entries()];
-}
-
-// upcoming: os dias já chegam do servidor na ordem certa (mais próximo primeiro).
-// past: o servidor devolve os horários sempre crescentes por dia; só a ORDEM DOS
-// DIAS precisa inverter aqui (mais recente primeiro), nunca os horários dentro
-// de um dia.
-export function orderDayGroups(
-  groups: [string, Availability[]][],
-  tab: "upcoming" | "past",
-): [string, Availability[]][] {
-  return tab === "past" ? [...groups].reverse() : groups;
-}
-
-export function summarizeDay(slots: Availability[]): {
-  busy: number;
-  free: number;
-  label: string;
-} {
-  const busy = slots.filter((slot) => slot.isBooked).length;
-  const free = slots.length - busy;
-  const minutes = slots.reduce(
-    (total, slot) => total + toMinutes(slot.endTime) - toMinutes(slot.startTime),
-    0,
-  );
-
-  const label = [
-    `${busy} ${busy === 1 ? "ocupado" : "ocupados"}`,
-    `${free} ${free === 1 ? "livre" : "livres"}`,
-    formatMinutes(minutes),
-  ].join(" · ");
-
-  return { busy, free, label };
+// Navegação da agenda: um dia por tela, então "anterior/próximo" é sempre
+// ±1 dia sobre a chave local — nunca sobre um Date em UTC, que erraria o dia
+// perto da meia-noite.
+export function shiftDayKey(dayKey: string, days: number): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return localDayKey(new Date(year, month - 1, day + days));
 }

@@ -2,15 +2,15 @@ import { Role } from "@prisma/client";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
 import { JwtPayload } from "../interfaces/auth";
 import { employeeRepository } from "../repositories/employeeRepository";
-import { availabilityRepository, ScheduleDirection } from "../repositories/availabilityRepository";
+import { availabilityRepository } from "../repositories/availabilityRepository";
 import { planAvailabilities } from "./availabilityGenerator";
 import {
   AvailabilityInput,
   AvailabilityRow,
-  clampPage,
+  businessDayKey,
+  dayKeyToDate,
+  resolveScheduleTarget,
   toAvailabilityDto,
-  totalPagesFor,
-  businessToday,
 } from "./availabilityRules";
 
 export interface GenerateInput {
@@ -55,22 +55,27 @@ function assertNotBooked(availability: AvailabilityRow, action: string): void {
   }
 }
 
-// ADMIN não tem agenda própria — precisa sempre dizer de quem quer ver.
-// EMPLOYEE sem employeeId cai na própria; com employeeId, pode olhar (e,
-// pela rota de reservas, agendar para) a agenda de um colega do mesmo
-// negócio.
+// Traduz a decisão pura de resolveScheduleTarget em erro HTTP e, quando o
+// alvo é outra pessoa (só ADMIN chega aqui), confirma que ela é mesmo um
+// colaborador do mesmo negócio.
 async function resolveTargetEmployeeId(
   actor: JwtPayload,
   employeeIdParam: number | undefined,
 ): Promise<number> {
-  if (employeeIdParam === undefined) {
-    if (actor.role !== Role.EMPLOYEE) {
+  const target = resolveScheduleTarget(actor, employeeIdParam);
+  if (!target.allowed) {
+    if (target.reason === "employee-id-required") {
       throw new BadRequestError("employeeId is required");
     }
-    return actor.sub;
+    throw new ForbiddenError("You do not have permission to view this schedule");
   }
 
-  const employee = await employeeRepository.findById(employeeIdParam);
+  // EMPLOYEE permitido é sempre a própria agenda — não precisa reconferir.
+  if (actor.role === Role.EMPLOYEE) {
+    return target.employeeId;
+  }
+
+  const employee = await employeeRepository.findById(target.employeeId);
   if (
     !employee ||
     employee.role !== Role.EMPLOYEE ||
@@ -79,50 +84,26 @@ async function resolveTargetEmployeeId(
     throw new ForbiddenError("You do not have permission to view this schedule");
   }
 
-  return employeeIdParam;
+  return target.employeeId;
 }
 
 export const availabilityService = {
-  async listAvailabilities(
+  // A agenda é um dia por tela: sem data, abre em hoje.
+  async listDay(
     actor: JwtPayload,
     employeeIdParam: number | undefined,
-    params: { tab: ScheduleDirection; page: number },
+    dateParam: string | undefined,
     now: Date,
   ) {
     const employeeId = await resolveTargetEmployeeId(actor, employeeIdParam);
-    const PAGE_SIZE = 7;
-    const todayStart = businessToday(now);
+    const date = dateParam ?? businessDayKey(now);
 
-    const totalDays = await availabilityRepository.countDates(
+    const rows = await availabilityRepository.findManyByEmployeeAndDate(
       employeeId,
-      params.tab,
-      todayStart,
-    );
-    const totalPages = totalPagesFor(totalDays, PAGE_SIZE);
-    const page = clampPage(params.page, totalPages);
-
-    const dateRows = await availabilityRepository.findDatesPage(
-      employeeId,
-      params.tab,
-      todayStart,
-      (page - 1) * PAGE_SIZE,
-      PAGE_SIZE,
+      dayKeyToDate(date),
     );
 
-    // Sem dia nenhum na página (aba vazia, ou página pedida além do fim antes
-    // do clamp): pula a segunda query, não sobra data pra filtrar.
-    const availabilities = dateRows.length
-      ? await availabilityRepository.findManyByEmployeeForDates(
-          employeeId,
-          dateRows.map((row) => row.date),
-        )
-      : [];
-
-    return {
-      availabilities: availabilities.map(toAvailabilityDto),
-      page,
-      totalPages,
-    };
+    return { date, availabilities: rows.map(toAvailabilityDto) };
   },
 
   async updateAvailability(employeeId: number, id: number, input: AvailabilityInput) {
