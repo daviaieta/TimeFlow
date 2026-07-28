@@ -3,7 +3,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  Add01Icon,
   Calendar03Icon,
   CheckmarkCircle02Icon,
   Delete02Icon,
@@ -32,8 +31,16 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Availability } from "@/lib/types";
+import { Availability, Employee } from "@/lib/types";
 import { formatBusinessName } from "@/lib/businessName";
 import { estimateGeneratedSlots } from "@/lib/generatePlan";
 import {
@@ -61,6 +68,11 @@ function formatDate(isoDate: string): string {
 export default function SchedulePage() {
   const user = useAuthUser();
 
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
+    user.role === "EMPLOYEE" ? user.id : null,
+  );
+
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -72,7 +84,6 @@ export default function SchedulePage() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [clientName, setClientName] = useState("");
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -97,59 +108,75 @@ export default function SchedulePage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingSubmitting, setDeletingSubmitting] = useState(false);
 
+  const [bookingSlot, setBookingSlot] = useState<Availability | null>(null);
+  const [bookingServiceId, setBookingServiceId] = useState("");
+  const [bookingClientName, setBookingClientName] = useState("");
+  const [bookingClientPhone, setBookingClientPhone] = useState("");
+  const [bookingClientEmail, setBookingClientEmail] = useState("");
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+
   const loadAvailabilities = useCallback(() => {
-    return fetchAdapter<{
-      availabilities: Availability[];
-      page: number;
-      totalPages: number;
-    }>({
-      method: "GET",
-      path: `/availabilities?tab=${tab}&page=${page}`,
-    })
-      .then(({ data }) => {
-        setAvailabilities(data.availabilities);
-        // O servidor clampa a página fora do intervalo válido (ex.: excluiu o
-        // último horário da última página) — sincronizar em vez de confiar
-        // no que foi pedido evita a tela ficar presa numa página inexistente.
-        setPage(data.page);
-        setTotalPages(data.totalPages);
-        setListError(null);
-      })
-      .catch((err) => {
-        setListError(err instanceof ApiError ? err.message : "Erro inesperado.");
-      })
-      .finally(() => {
+    // Todo o corpo roda num .then() (não direto no corpo do effect) pra não
+    // disparar o lint de setState síncrono dentro de useEffect — isso cobre
+    // tanto o setLoading(true) inicial (evita o "flash" da agenda do
+    // colaborador anterior ao trocar de seleção) quanto o branch abaixo.
+    return Promise.resolve().then(() => {
+      setLoading(true);
+
+      if (selectedEmployeeId === null) {
+        // Ainda não há colaborador selecionado (ex.: negócio sem nenhum
+        // colaborador, ou a busca de /employees falhou) — sem isso, o
+        // spinner inicial (loading = true) nunca seria desligado.
         setLoading(false);
-      });
-  }, [tab, page]);
+        return undefined;
+      }
+
+      return fetchAdapter<{
+        availabilities: Availability[];
+        page: number;
+        totalPages: number;
+      }>({
+        method: "GET",
+        path: `/availabilities?employeeId=${selectedEmployeeId}&tab=${tab}&page=${page}`,
+      })
+        .then(({ data }) => {
+          setAvailabilities(data.availabilities);
+          // O servidor clampa a página fora do intervalo válido (ex.: excluiu o
+          // último horário da última página) — sincronizar em vez de confiar
+          // no que foi pedido evita a tela ficar presa numa página inexistente.
+          setPage(data.page);
+          setTotalPages(data.totalPages);
+          setListError(null);
+        })
+        .catch((err) => {
+          setListError(err instanceof ApiError ? err.message : "Erro inesperado.");
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    });
+  }, [selectedEmployeeId, tab, page]);
 
   useEffect(() => {
     loadAvailabilities();
   }, [loadAvailabilities]);
 
-  if (user.role !== "EMPLOYEE") {
-    return (
-      <div className="mx-auto w-full max-w-5xl">
-        <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
-          A agenda de horários é gerenciada por cada colaborador.
-        </p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    fetchAdapter<{ employees: Employee[] }>({ method: "GET", path: "/employees" })
+      .then(({ data }) => {
+        setEmployees(data.employees);
+        setSelectedEmployeeId((current) => current ?? data.employees[0]?.id ?? null);
+      })
+      .catch(() => {
+        // Lista de funcionários é só pro seletor — se falhar, a tela já
+        // mostra o erro de carregar a agenda em seguida.
+      });
+  }, []);
 
   function selectTab(next: "upcoming" | "past") {
     setTab(next);
     setPage(1);
-  }
-
-  function openCreate() {
-    setEditing(null);
-    setDate("");
-    setStartTime("");
-    setEndTime("");
-    setClientName("");
-    setFormError(null);
-    setDialogOpen(true);
   }
 
   function openEdit(availability: Availability) {
@@ -157,7 +184,6 @@ export default function SchedulePage() {
     setDate(availability.date.slice(0, 10));
     setStartTime(availability.startTime);
     setEndTime(availability.endTime);
-    setClientName(availability.clientName ?? "");
     setFormError(null);
     setDialogOpen(true);
   }
@@ -167,18 +193,14 @@ export default function SchedulePage() {
     setFormError(null);
     setSubmitting(true);
 
-    const body = { date, startTime, endTime, clientName: clientName.trim() || null };
+    const body = { date, startTime, endTime };
 
     try {
-      if (editing) {
-        await fetchAdapter({
-          method: "PUT",
-          path: `/availabilities/${editing.id}`,
-          body,
-        });
-      } else {
-        await fetchAdapter({ method: "POST", path: "/availabilities", body });
-      }
+      await fetchAdapter({
+        method: "PUT",
+        path: `/availabilities/${editing?.id}`,
+        body,
+      });
       setDialogOpen(false);
       await loadAvailabilities();
     } catch (err) {
@@ -257,8 +279,48 @@ export default function SchedulePage() {
     }
   }
 
+  function openBooking(slot: Availability) {
+    setBookingSlot(slot);
+    setBookingServiceId("");
+    setBookingClientName("");
+    setBookingClientPhone("");
+    setBookingClientEmail("");
+    setBookingError(null);
+  }
+
+  async function handleBookingSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!bookingSlot) return;
+
+    setBookingError(null);
+    setBookingSubmitting(true);
+
+    try {
+      await fetchAdapter({
+        method: "POST",
+        path: "/bookings",
+        body: {
+          availabilityId: bookingSlot.id,
+          serviceId: Number(bookingServiceId),
+          clientName: bookingClientName.trim(),
+          clientPhone: bookingClientPhone.trim(),
+          ...(bookingClientEmail.trim() ? { clientEmail: bookingClientEmail.trim() } : {}),
+        },
+      });
+      setBookingSlot(null);
+      await loadAvailabilities();
+    } catch (err) {
+      setBookingError(err instanceof ApiError ? err.message : "Erro inesperado.");
+    } finally {
+      setBookingSubmitting(false);
+    }
+  }
+
   const todayKey = localDayKey(new Date());
   const dayGroups = orderDayGroups(groupByDate(availabilities), tab);
+  const isOwnAgenda = selectedEmployeeId === user.id;
+  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId);
+  const bookableServices = selectedEmployee?.services ?? [];
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -274,15 +336,37 @@ export default function SchedulePage() {
             Gerencie seus horários disponíveis para agendamento.
           </p>
         </div>
+        <Select
+          items={employees.map((employee) => ({
+            value: String(employee.id),
+            label: employee.id === user.id ? "Eu" : employee.name,
+          }))}
+          value={selectedEmployeeId ? String(selectedEmployeeId) : ""}
+          onValueChange={(value) => {
+            setSelectedEmployeeId(Number(value));
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Escolha um colaborador" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {employees.map((employee) => (
+                <SelectItem key={employee.id} value={String(employee.id)}>
+                  {employee.id === user.id ? "Eu" : employee.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <div className="flex shrink-0 gap-2">
-          <Button variant="outline" onClick={openGenerate}>
-            <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
-            Gerar horários
-          </Button>
-          <Button onClick={openCreate}>
-            <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
-            Novo horário
-          </Button>
+          {isOwnAgenda && (
+            <Button variant="outline" onClick={openGenerate}>
+              <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
+              Gerar horários
+            </Button>
+          )}
         </div>
       </div>
 
@@ -319,6 +403,12 @@ export default function SchedulePage() {
         ) : listError ? (
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-destructive">
             {listError}
+          </p>
+        ) : selectedEmployeeId === null ? (
+          <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
+            {employees.length === 0
+              ? "Nenhum colaborador cadastrado ainda."
+              : "Selecione um colaborador para ver a agenda."}
           </p>
         ) : dayGroups.length === 0 ? (
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
@@ -390,29 +480,42 @@ export default function SchedulePage() {
                                 </p>
                               </div>
 
-                              {slot.locked ? (
+                              {slot.isBooked ? (
                                 <Badge>Reservado</Badge>
                               ) : (
                                 <div className="flex shrink-0 gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label="Editar horário"
-                                    onClick={() => openEdit(slot)}
-                                  >
-                                    <HugeiconsIcon icon={PencilEdit02Icon} />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label="Excluir horário"
-                                    onClick={() => {
-                                      setDeleteError(null);
-                                      setDeleting(slot);
-                                    }}
-                                  >
-                                    <HugeiconsIcon icon={Delete02Icon} />
-                                  </Button>
+                                  {tab === "upcoming" && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openBooking(slot)}
+                                    >
+                                      Reservar
+                                    </Button>
+                                  )}
+                                  {isOwnAgenda && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label="Editar horário"
+                                        onClick={() => openEdit(slot)}
+                                      >
+                                        <HugeiconsIcon icon={PencilEdit02Icon} />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label="Excluir horário"
+                                        onClick={() => {
+                                          setDeleteError(null);
+                                          setDeleting(slot);
+                                        }}
+                                      >
+                                        <HugeiconsIcon icon={Delete02Icon} />
+                                      </Button>
+                                    </>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -455,7 +558,7 @@ export default function SchedulePage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? "Editar horário" : "Novo horário"}</DialogTitle>
+            <DialogTitle>Editar horário</DialogTitle>
             <DialogDescription>
               Defina o dia e o intervalo em que você está disponível.
             </DialogDescription>
@@ -494,19 +597,6 @@ export default function SchedulePage() {
                   />
                 </Field>
               </div>
-              <Field>
-                <FieldLabel htmlFor="slot-client">Cliente (opcional)</FieldLabel>
-                <Input
-                  id="slot-client"
-                  value={clientName}
-                  onChange={(event) => setClientName(event.target.value)}
-                  placeholder="Nome de quem vai ocupar o horário"
-                  maxLength={80}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Deixe vazio para manter o horário livre para agendamento.
-                </p>
-              </Field>
               {formError && <FieldError>{formError}</FieldError>}
               <DialogFooter>
                 <Button
@@ -781,6 +871,92 @@ export default function SchedulePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={bookingSlot !== null} onOpenChange={(open) => !open && setBookingSlot(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reservar horário</DialogTitle>
+            <DialogDescription>
+              {bookingSlot &&
+                `${formatDate(bookingSlot.date.slice(0, 10))} · ${bookingSlot.startTime}`}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBookingSubmit}>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="booking-service">Serviço</FieldLabel>
+                <Select
+                  items={bookableServices.map((service) => ({
+                    value: String(service.id),
+                    label: service.name,
+                  }))}
+                  value={bookingServiceId}
+                  onValueChange={(value) => setBookingServiceId(value ?? "")}
+                >
+                  <SelectTrigger id="booking-service" className="w-full">
+                    <SelectValue placeholder="Escolha o serviço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {bookableServices.map((service) => (
+                        <SelectItem key={service.id} value={String(service.id)}>
+                          {service.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="booking-name">Nome do cliente</FieldLabel>
+                <Input
+                  id="booking-name"
+                  value={bookingClientName}
+                  onChange={(event) => setBookingClientName(event.target.value)}
+                  maxLength={80}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="booking-phone">Telefone</FieldLabel>
+                <Input
+                  id="booking-phone"
+                  value={bookingClientPhone}
+                  onChange={(event) => setBookingClientPhone(event.target.value)}
+                  maxLength={20}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="booking-email">Email (opcional)</FieldLabel>
+                <Input
+                  id="booking-email"
+                  type="email"
+                  value={bookingClientEmail}
+                  onChange={(event) => setBookingClientEmail(event.target.value)}
+                  maxLength={120}
+                />
+              </Field>
+              {bookingError && <FieldError>{bookingError}</FieldError>}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setBookingSlot(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={bookingSubmitting || !bookingServiceId}>
+                  {bookingSubmitting ? (
+                    <>
+                      <Spinner data-icon="inline-start" />
+                      Reservando…
+                    </>
+                  ) : (
+                    "Reservar"
+                  )}
+                </Button>
+              </DialogFooter>
+            </FieldGroup>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { BookingSource } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 
 interface BookingData {
@@ -5,6 +6,7 @@ interface BookingData {
   clientName: string;
   clientPhone: string;
   clientEmail: string | null;
+  source: BookingSource;
 }
 
 // Sinaliza claim perdido de dentro da transação: precisa ser exceção para o

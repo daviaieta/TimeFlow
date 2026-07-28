@@ -1,27 +1,53 @@
-import { PlanName } from "@prisma/client";
-import { asaasClient } from "../lib/asaasClient";
+import { PlanName, SubscriptionStatus } from "@prisma/client";
+import type Stripe from "stripe";
+import { env } from "../config/env";
+import { stripeClient } from "../lib/stripeClient";
 import { AppError, ForbiddenError, NotFoundError } from "../lib/errors";
 import { businessRepository } from "../repositories/businessRepository";
 import { userRepository } from "../repositories/userRepository";
 import { canEditBusiness } from "./accountRules";
-import { planDescription, planPrice, statusFromWebhookEvent } from "./billingRules";
+import { planDescription, planPriceInCents, statusFromStripeEvent } from "./billingRules";
 
-interface SubscribeInput {
-  planName: PlanName;
-  cpfCnpj: string;
-}
+// Descobre a qual negócio um evento do Stripe pertence. Três caminhos, porque
+// os objetos de evento não são iguais: a sessão de checkout e a subscription
+// carregam nosso metadata.businessId; a fatura não carrega, mas referencia a
+// subscription e sempre traz o customer.
+async function resolveBusinessFromEvent(event: Stripe.Event) {
+  const object = event.data.object as unknown as Record<string, unknown>;
 
-interface WebhookPayload {
-  event: string;
-  payment?: { subscription?: string };
+  const metadata = object.metadata as Record<string, string> | null | undefined;
+  if (metadata?.businessId) {
+    return businessRepository.findById(Number(metadata.businessId));
+  }
+
+  const subscriptionId = event.type.startsWith("customer.subscription.")
+    ? (object.id as string)
+    : typeof object.subscription === "string"
+      ? object.subscription
+      : null;
+
+  if (subscriptionId) {
+    const business = await businessRepository.findByStripeSubscriptionId(subscriptionId);
+    if (business) {
+      return business;
+    }
+  }
+
+  // Último recurso: o campo `subscription` da fatura mudou de lugar entre
+  // versões da API do Stripe, mas `customer` sempre está lá.
+  if (typeof object.customer === "string") {
+    return businessRepository.findByStripeCustomerId(object.customer);
+  }
+
+  return null;
 }
 
 export const billingService = {
-  async subscribe(
+  async createCheckoutSession(
     businessId: number,
     userBusinessId: number | null,
     adminUserId: number,
-    input: SubscribeInput,
+    input: { planName: PlanName },
   ): Promise<{ checkoutUrl: string }> {
     // Mesma ordem de PUT /businesses/:id: o gate vem antes de qualquer leitura
     // do alvo, pra não vazar a existência de outro negócio via 404 vs 403.
@@ -39,108 +65,120 @@ export const billingService = {
       throw new NotFoundError("Admin user not found");
     }
 
-    // Retry: essa empresa já tem uma assinatura Asaas viva (ex.: ficou
-    // PAST_DUE e o ADMIN clicou em "Assinar" de novo). NÃO cria uma segunda
-    // assinatura aqui — isso cobraria em dobro e órfã a primeira (os
-    // webhooks dela deixariam de bater com qualquer Business, ver
-    // handleWebhook abaixo). Em vez disso reusa a assinatura existente e
-    // devolve a fatura em aberto dela: é exatamente o que uma empresa
-    // PAST_DUE precisa pra pagar. Troca de plano (input.planName diferente do
-    // atual) está fora de escopo nesta entrega (spec, "Fora de escopo":
-    // upgrade/downgrade) — mesmo assim não criamos assinatura nova; só
-    // persistimos o planName localmente.
-    if (business.asaasSubscriptionId && business.asaasCustomerId) {
-      if (input.cpfCnpj !== business.cpfCnpj) {
-        // Corrige no Asaas o cpfCnpj que o cliente está tentando corrigir
-        // aqui — sem isso, a correção não muda nada onde importa (a fatura).
-        await asaasClient.updateCustomer(business.asaasCustomerId, { cpfCnpj: input.cpfCnpj });
-      }
-
-      const payment = await asaasClient.getFirstSubscriptionPayment(business.asaasSubscriptionId);
-      if (!payment) {
-        throw new AppError("Asaas did not return a payment for the existing subscription", 502);
-      }
-
-      await businessRepository.updateBilling(businessId, {
-        planName: input.planName,
-        asaasCustomerId: business.asaasCustomerId,
-        asaasSubscriptionId: business.asaasSubscriptionId,
-        cpfCnpj: input.cpfCnpj,
-      });
-
-      return { checkoutUrl: payment.invoiceUrl };
-    }
-
-    // Reaproveita o customer se essa empresa já tentou assinar antes mas não
-    // chegou a criar a assinatura (ex.: falhou entre as duas chamadas) —
-    // evita duplicar cliente no Asaas.
-    let customerId = business.asaasCustomerId;
+    // Reusa o customer se já existe — cada clique em "Assinar" criaria um
+    // cliente novo no Stripe sem isso.
+    let customerId = business.stripeCustomerId;
     if (!customerId) {
-      const customer = await asaasClient.createCustomer({
+      const customer = await stripeClient.createCustomer({
         name: admin.name,
         email: admin.email,
-        cpfCnpj: input.cpfCnpj,
+        businessId,
       });
       customerId = customer.id;
-    } else if (input.cpfCnpj !== business.cpfCnpj) {
-      await asaasClient.updateCustomer(customerId, { cpfCnpj: input.cpfCnpj });
     }
 
-    const nextDueDate = new Date();
-    nextDueDate.setDate(nextDueDate.getDate() + 1);
-
-    const subscription = await asaasClient.createSubscription({
-      customer: customerId,
-      value: planPrice(input.planName),
-      nextDueDate: nextDueDate.toISOString().slice(0, 10),
-      description: planDescription(input.planName),
+    const session = await stripeClient.createCheckoutSession({
+      customerId,
+      businessId,
+      planName: input.planName,
+      amountInCents: planPriceInCents(input.planName),
+      productName: planDescription(input.planName),
+      successUrl: `${env.webOrigin}/assinatura?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${env.webOrigin}/assinatura`,
     });
 
-    const payment = await asaasClient.getFirstSubscriptionPayment(subscription.id);
-    if (!payment) {
-      throw new AppError("Asaas did not return a payment for the new subscription", 502);
+    if (!session.url) {
+      throw new AppError("Stripe did not return a checkout URL", 502);
     }
 
-    // subscriptionStatus NÃO muda aqui — fica PENDING (ou o que já era) até o
-    // webhook confirmar o pagamento de verdade. Marcar ACTIVE neste ponto
-    // destravaria o dashboard antes de qualquer dinheiro ter entrado.
+    // subscriptionStatus NÃO muda aqui: criar a sessão não é pagar.
     await businessRepository.updateBilling(businessId, {
       planName: input.planName,
-      asaasCustomerId: customerId,
-      asaasSubscriptionId: subscription.id,
-      cpfCnpj: input.cpfCnpj,
+      stripeCustomerId: customerId,
     });
 
-    return { checkoutUrl: payment.invoiceUrl };
+    return { checkoutUrl: session.url };
   },
 
-  async handleWebhook(payload: WebhookPayload): Promise<void> {
-    const status = statusFromWebhookEvent(payload.event);
-    if (!status) {
-      // Evento não mapeado (PAYMENT_CREATED, PAYMENT_UPDATED, etc.) — alto
-      // volume, esperado, sem ação — não vale logar.
-      return;
+  async confirmCheckout(
+    businessId: number,
+    userBusinessId: number | null,
+    sessionId: string,
+  ): Promise<{ subscriptionStatus: SubscriptionStatus }> {
+    if (!canEditBusiness(businessId, userBusinessId)) {
+      throw new ForbiddenError("You do not have permission to manage this business's subscription");
     }
 
-    if (!payload.payment?.subscription) {
-      // Corpo malformado — baixo valor de log, não é o caso que o spec pede.
-      return;
-    }
-
-    const business = await businessRepository.findByAsaasSubscriptionId(payload.payment.subscription);
+    const business = await businessRepository.findById(businessId);
     if (!business) {
-      // Chegou um evento de pagamento de verdade pra uma assinatura que não
-      // reconhecemos — não é erro do Asaas (não deve gerar retry, por isso
-      // ainda respondemos 200), mas é o sinal operacional que teria pego o
-      // bug de assinatura duplicada/órfã: vale um warning. console.warn (não
-      // request.log) porque o Fastify deste projeto sobe sem `logger`
-      // configurado em app.ts — request.log é um logger nulo, silencioso;
-      // console.warn é o que o resto do serviço já usa pra isso
-      // (businessService.ts usa console.error/console.log do mesmo jeito).
-      console.warn(
-        `Asaas webhook: no Business matches asaasSubscriptionId=${payload.payment.subscription} (event=${payload.event})`,
-      );
+      throw new NotFoundError("Business not found");
+    }
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripeClient.retrieveCheckoutSession(sessionId);
+    } catch {
+      throw new NotFoundError("Checkout session not found");
+    }
+
+    // O sessionId vem do cliente, então não vale nada sozinho: quem diz se foi
+    // pago é o Stripe, e a sessão ainda precisa ser DESTE negócio — sem este
+    // cheque, um ADMIN poderia colar o session_id pago de outro negócio.
+    if (session.metadata?.businessId !== String(businessId)) {
+      throw new ForbiddenError("This checkout session does not belong to this business");
+    }
+
+    if (session.status !== "complete" || session.payment_status !== "paid") {
+      // Não é erro: cartão em análise, ou o usuário voltou sem concluir.
+      return { subscriptionStatus: business.subscriptionStatus };
+    }
+
+    const subscriptionId =
+      typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+
+    if (subscriptionId) {
+      await businessRepository.setStripeSubscriptionId(businessId, subscriptionId);
+    }
+
+    await businessRepository.updateSubscriptionStatus(businessId, SubscriptionStatus.ACTIVE);
+
+    return { subscriptionStatus: SubscriptionStatus.ACTIVE };
+  },
+
+  async handleWebhook(event: Stripe.Event): Promise<void> {
+    const status = statusFromStripeEvent(event.type);
+    if (!status) {
+      // Evento não mapeado — alto volume, esperado, sem ação.
       return;
+    }
+
+    // checkout.session.completed também dispara para sessão não paga (ex.:
+    // boleto aguardando compensação). Só "paid" ativa.
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.payment_status !== "paid") {
+        return;
+      }
+    }
+
+    const business = await resolveBusinessFromEvent(event);
+    if (!business) {
+      // Evento real do Stripe para uma assinatura que não reconhecemos — não é
+      // erro do Stripe (por isso ainda respondemos 200), mas é o sinal
+      // operacional que revelaria assinatura órfã. console.warn e não
+      // request.log porque o Fastify deste projeto sobe sem `logger`
+      // configurado em app.ts: request.log seria um logger nulo.
+      console.warn(`Stripe webhook: no Business matches event ${event.type} (${event.id})`);
+      return;
+    }
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const subscriptionId =
+        typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+      if (subscriptionId) {
+        await businessRepository.setStripeSubscriptionId(business.id, subscriptionId);
+      }
     }
 
     await businessRepository.updateSubscriptionStatus(business.id, status);

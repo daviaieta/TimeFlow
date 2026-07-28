@@ -1,60 +1,81 @@
 import { Role } from "@prisma/client";
-import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { FastifyInstance } from "fastify";
 import {
-  receiveWebhook,
-  subscribe,
-  SubscribeBody,
-  SubscribeParams,
-  WebhookBody,
+  confirmCheckout,
+  createCheckoutSession,
+  receiveStripeWebhook,
+  CheckoutSessionBody,
+  CheckoutSessionParams,
+  ConfirmCheckoutBody,
 } from "../controllers/billingController";
-import { env } from "../config/env";
-import { UnauthorizedError } from "../lib/errors";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
 
-const subscribeSchema = {
-  params: {
-    type: "object",
-    required: ["id"],
-    additionalProperties: false,
-    properties: {
-      id: { type: "integer" },
-    },
+const businessParamsSchema = {
+  type: "object",
+  required: ["id"],
+  additionalProperties: false,
+  properties: {
+    id: { type: "integer" },
   },
+};
+
+const createCheckoutSessionSchema = {
+  params: businessParamsSchema,
   body: {
     type: "object",
-    required: ["planName", "cpfCnpj"],
+    required: ["planName"],
     additionalProperties: false,
     properties: {
       planName: { type: "string", enum: ["ESSENCIAL", "PROFISSIONAL", "EQUIPE"] },
-      // CPF (11 dígitos) ou CNPJ (14), sem pontuação — o Asaas valida o
-      // dígito verificador do lado dele.
-      cpfCnpj: { type: "string", pattern: "^\\d{11}(\\d{3})?$" },
     },
   },
 };
 
-// O Asaas não conhece nosso JWT — a prova de que a chamada é dele mesmo é um
-// token fixo configurado no painel do Asaas e conferido aqui.
-async function verifyAsaasWebhook(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-  if (request.headers["asaas-access-token"] !== env.asaasWebhookToken) {
-    throw new UnauthorizedError("Invalid webhook token");
-  }
-}
+const confirmCheckoutSchema = {
+  params: businessParamsSchema,
+  body: {
+    type: "object",
+    required: ["sessionId"],
+    additionalProperties: false,
+    properties: {
+      sessionId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+  },
+};
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
-  app.post<{ Params: SubscribeParams; Body: SubscribeBody }>(
-    "/businesses/:id/subscription",
+  app.post<{ Params: CheckoutSessionParams; Body: CheckoutSessionBody }>(
+    "/businesses/:id/checkout-session",
     {
-      schema: subscribeSchema,
+      schema: createCheckoutSessionSchema,
       preHandler: [authenticate, authorize(Role.ADMIN)],
     },
-    subscribe,
+    createCheckoutSession,
   );
 
-  app.post<{ Body: WebhookBody }>(
-    "/webhooks/asaas",
-    { preHandler: [verifyAsaasWebhook] },
-    receiveWebhook,
+  app.post<{ Params: CheckoutSessionParams; Body: ConfirmCheckoutBody }>(
+    "/businesses/:id/checkout-session/confirm",
+    {
+      schema: confirmCheckoutSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN)],
+    },
+    confirmCheckout,
   );
+}
+
+// Plugin separado por causa do corpo cru: constructEvent precisa dos bytes
+// EXATOS que o Stripe assinou, e o parser JSON padrão do Fastify entregaria um
+// objeto reserializado — a assinatura nunca bateria. Como content type parser
+// é encapsulado por plugin, isolar aqui não afeta nenhuma outra rota.
+export async function stripeWebhookRoutes(app: FastifyInstance): Promise<void> {
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "buffer" },
+    (_request, body, done) => {
+      done(null, body);
+    },
+  );
+
+  app.post("/webhooks/stripe", receiveStripeWebhook);
 }

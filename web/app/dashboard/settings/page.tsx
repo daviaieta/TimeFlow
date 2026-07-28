@@ -25,7 +25,6 @@ export default function SettingsPage() {
         {user.role === "ADMIN" && user.business ? (
           <>
             <BillingCard
-              businessId={user.business.id}
               planName={user.business.planName}
               subscriptionStatus={user.business.subscriptionStatus}
             />

@@ -8,6 +8,14 @@ const PLAN_PRICES: Record<PlanName, number> = {
   EQUIPE: 179.9,
 };
 
+// Centavos como literal, não planPrice * 100: 49.9 * 100 dá 4989.999... em
+// float, e o Stripe recusa unit_amount não-inteiro.
+const PLAN_CENTS: Record<PlanName, number> = {
+  ESSENCIAL: 4990,
+  PROFISSIONAL: 8990,
+  EQUIPE: 17990,
+};
+
 const PLAN_LABELS: Record<PlanName, string> = {
   ESSENCIAL: "Essencial",
   PROFISSIONAL: "Profissional",
@@ -18,24 +26,32 @@ export function planPrice(plan: PlanName): number {
   return PLAN_PRICES[plan];
 }
 
+export function planPriceInCents(plan: PlanName): number {
+  return PLAN_CENTS[plan];
+}
+
 export function planDescription(plan: PlanName): string {
   return `Time Flow - Plano ${PLAN_LABELS[plan]}`;
 }
 
-const ACTIVE_EVENTS = new Set(["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"]);
-const PAST_DUE_EVENTS = new Set(["PAYMENT_OVERDUE"]);
+const ACTIVE_EVENTS = new Set(["checkout.session.completed", "invoice.paid"]);
+const PAST_DUE_EVENTS = new Set(["invoice.payment_failed"]);
+const CANCELED_EVENTS = new Set(["customer.subscription.deleted"]);
 
-// O Asaas não emite evento de "assinatura cancelada" — cancelamento é sempre
-// uma ação nossa (fora de escopo aqui). Qualquer evento fora dos dois grupos
-// abaixo (PAYMENT_CREATED, PAYMENT_UPDATED, PAYMENT_DELETED, etc.) é
-// recebido e ignorado: devolve null, o handler não muda nada.
-export function statusFromWebhookEvent(event: string): SubscriptionStatus | null {
-  if (ACTIVE_EVENTS.has(event)) {
+// Mapeia só o TIPO do evento. Para checkout.session.completed ainda é preciso
+// conferir payment_status === "paid" no próprio objeto — isso fica no
+// billingService, que tem o evento inteiro em mãos.
+export function statusFromStripeEvent(eventType: string): SubscriptionStatus | null {
+  if (ACTIVE_EVENTS.has(eventType)) {
     return SubscriptionStatus.ACTIVE;
   }
 
-  if (PAST_DUE_EVENTS.has(event)) {
+  if (PAST_DUE_EVENTS.has(eventType)) {
     return SubscriptionStatus.PAST_DUE;
+  }
+
+  if (CANCELED_EVENTS.has(eventType)) {
+    return SubscriptionStatus.CANCELED;
   }
 
   return null;

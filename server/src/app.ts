@@ -7,7 +7,8 @@ import { env } from "./config/env";
 import { errorHandler } from "./lib/errorHandler";
 import { availabilityRoutes } from "./routes/availabilityRoutes";
 import { authRoutes } from "./routes/authRoutes";
-import { billingRoutes } from "./routes/billingRoutes";
+import { billingRoutes, stripeWebhookRoutes } from "./routes/billingRoutes";
+import { bookingRoutes } from "./routes/bookingRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
 import { dashboardRoutes } from "./routes/dashboardRoutes";
 import { employeeRoutes } from "./routes/employeeRoutes";
@@ -41,10 +42,12 @@ export function buildApp(): FastifyInstance {
   app.register(authRoutes);
   app.register(businessRoutes);
   app.register(billingRoutes);
+  app.register(stripeWebhookRoutes);
   app.register(dashboardRoutes);
   app.register(serviceRoutes);
   app.register(employeeRoutes);
   app.register(availabilityRoutes);
+  app.register(bookingRoutes);
   app.register(publicRoutes);
 
   return app;

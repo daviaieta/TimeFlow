@@ -2,15 +2,12 @@ export interface AvailabilityInput {
   date: string;
   startTime: string;
   endTime: string;
-  clientName?: string | null;
 }
 
 export interface AvailabilityData {
   date: Date;
   startTime: string;
   endTime: string;
-  clientName: string | null;
-  isBooked: boolean;
 }
 
 export interface AvailabilityRow {
@@ -19,7 +16,6 @@ export interface AvailabilityRow {
   startTime: string;
   endTime: string;
   isBooked: boolean;
-  clientName: string | null;
   booking: { id: number; clientName: string } | null;
 }
 
@@ -30,30 +26,8 @@ export interface AvailabilityDto {
   endTime: string;
   isBooked: boolean;
   clientName: string | null;
-  locked: boolean;
 }
 
-export function normalizeClientName(value?: string | null): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
-
-// Um horário só é "ocupado" quando tem alguém associado — não existe slot
-// marcado sem nome.
-export function buildAvailabilityData(input: AvailabilityInput): AvailabilityData {
-  const clientName = normalizeClientName(input.clientName);
-
-  return {
-    date: new Date(input.date),
-    startTime: input.startTime,
-    endTime: input.endTime,
-    clientName,
-    isBooked: clientName !== null,
-  };
-}
-
-// locked = reserva feita por cliente externo. Encaixe manual (nome sem Booking)
-// continua sob controle do colaborador.
 export function toAvailabilityDto(row: AvailabilityRow): AvailabilityDto {
   return {
     id: row.id,
@@ -61,10 +35,7 @@ export function toAvailabilityDto(row: AvailabilityRow): AvailabilityDto {
     startTime: row.startTime,
     endTime: row.endTime,
     isBooked: row.isBooked,
-    // O encaixe manual tem precedência: se o colaborador anotou um nome, é o
-    // dele que ele espera ver. Sem anotação, cai no nome de quem reservou.
-    clientName: row.clientName ?? row.booking?.clientName ?? null,
-    locked: row.booking !== null,
+    clientName: row.booking?.clientName ?? null,
   };
 }
 

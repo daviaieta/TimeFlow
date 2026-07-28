@@ -10,15 +10,15 @@ function slot(overrides: Partial<SlotRow> = {}): SlotRow {
     startTime: "09:00",
     endTime: "10:00",
     isBooked: false,
-    clientName: null,
     employeeId: 1,
     booking: null,
     ...overrides,
   };
 }
 
-// Por padrão cada slot carrega uma reserva distinta (id colado no id do slot).
-// Slots da MESMA reserva — serviço longo — declaram booking.id igual à mão.
+// Por padrão cada slot carrega uma reserva distinta (id colado no id do slot),
+// vinda do site. Slots da MESMA reserva — serviço longo — declaram booking.id
+// igual à mão; reserva interna passa source: "INTERNAL" no overrides.
 function booked(price: string, overrides: Partial<SlotRow> = {}): SlotRow {
   return slot({
     isBooked: true,
@@ -26,6 +26,7 @@ function booked(price: string, overrides: Partial<SlotRow> = {}): SlotRow {
       id: overrides.id ?? 1,
       clientName: "Cliente",
       clientPhone: "11999999999",
+      source: "ONLINE",
       service: { id: 1, name: "Corte", price },
     },
     ...overrides,
@@ -38,6 +39,7 @@ function longBooking(price: string, serviceId = 1): SlotRow[] {
     id: 77,
     clientName: "Rafael",
     clientPhone: "11999999999",
+    source: "ONLINE" as const,
     service: { id: serviceId, name: "Descoloração", price },
   };
 
@@ -53,7 +55,6 @@ function upcomingRow(overrides: Partial<UpcomingSlotRow> = {}): UpcomingSlotRow 
     date: new Date("2026-07-25T00:00:00.000Z"),
     startTime: "14:00",
     endTime: "15:00",
-    clientName: null,
     employee: { name: "Ana" },
     booking: {
       id: overrides.id ?? 1,
@@ -117,32 +118,25 @@ test("serviço longo ocupa os dois slots na taxa de ocupação", () => {
   assert.equal(kpis.occupancy.rate, 0.5);
 });
 
-test("encaixe manual conta como ocupado mas não como reserva do site", () => {
-  const manual = slot({ id: 2, isBooked: true, clientName: "Encaixe" });
-  const kpis = buildKpis([booked("50.00"), manual], { current: 0, previous: 0 });
+test("reserva interna conta separado da reserva do site", () => {
+  const online = booked("50.00", { id: 1 });
+  const internal = booked("30.00", {
+    id: 2,
+    booking: {
+      id: 2,
+      clientName: "Rafael",
+      clientPhone: "11999999999",
+      source: "INTERNAL",
+      service: { id: 2, name: "Barba", price: "30.00" },
+    },
+  });
+
+  const kpis = buildKpis([online, internal], { current: 0, previous: 0 });
 
   assert.equal(kpis.bookings.total, 2);
   assert.equal(kpis.bookings.online, 1);
-  assert.equal(kpis.bookings.manual, 1);
-});
-
-test("receita soma só os slots com booking real", () => {
-  const manual = slot({ id: 2, isBooked: true, clientName: "Encaixe" });
-  const kpis = buildKpis(
-    [booked("50.00"), booked("30.50", { id: 3 }), manual],
-    { current: 0, previous: 0 },
-  );
-
-  assert.equal(kpis.revenue.scheduled, "80.50");
-  assert.equal(kpis.revenue.averageTicket, "40.25");
-});
-
-test("ticket médio é zero quando só existem encaixes manuais", () => {
-  const manual = slot({ isBooked: true, clientName: "Encaixe" });
-  const kpis = buildKpis([manual], { current: 0, previous: 0 });
-
-  assert.equal(kpis.revenue.scheduled, "0.00");
-  assert.equal(kpis.revenue.averageTicket, "0.00");
+  assert.equal(kpis.bookings.internal, 1);
+  assert.equal(kpis.revenue.scheduled, "80.00");
 });
 
 test("ritmo repassa as contagens de reservas criadas", () => {
@@ -273,12 +267,12 @@ test("serviços rankeiam por receita e o share soma 1", () => {
   const corte = (id: number) =>
     booked("30.00", { id, booking: {
       id,
-      clientName: "C", clientPhone: "1",
+      clientName: "C", clientPhone: "1", source: "ONLINE",
       service: { id: 1, name: "Corte", price: "30.00" },
     } });
   const barba = booked("70.00", { id: 9, booking: {
     id: 9,
-    clientName: "C", clientPhone: "1",
+    clientName: "C", clientPhone: "1", source: "ONLINE",
     service: { id: 2, name: "Barba", price: "70.00" },
   } });
 
@@ -315,7 +309,7 @@ test("serviços com receita zero têm share zero, não NaN", () => {
   const rows = rankServices([
     booked("0.00", { booking: {
       id: 1,
-      clientName: "C", clientPhone: "1",
+      clientName: "C", clientPhone: "1", source: "ONLINE",
       service: { id: 1, name: "Cortesia", price: "0.00" },
     } }),
   ]);
@@ -324,8 +318,17 @@ test("serviços com receita zero têm share zero, não NaN", () => {
   assert.equal(rows[0].revenue, "0.00");
 });
 
-test("encaixe manual não entra no ranking de serviços", () => {
-  assert.deepEqual(rankServices([slot({ isBooked: true, clientName: "Encaixe" })]), []);
+test("reserva interna entra no ranking de serviços igual à do site", () => {
+  const rows = rankServices([
+    booked("40.00", { booking: {
+      id: 1,
+      clientName: "C", clientPhone: "1", source: "INTERNAL",
+      service: { id: 1, name: "Corte", price: "40.00" },
+    } }),
+  ]);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].revenue, "40.00");
 });
 
 test("próxima reserva expõe cliente, telefone, serviço e profissional", () => {
@@ -367,31 +370,6 @@ test("reserva longa aparece uma vez e vai até o fim do atendimento", () => {
   assert.equal(rows[0].availabilityId, 1);
   assert.equal(rows[0].startTime, "14:00");
   assert.equal(rows[0].endTime, "15:00");
-});
-
-test("encaixes manuais distintos não são agrupados", () => {
-  const rows = buildUpcoming(
-    [
-      upcomingRow({ id: 1, startTime: "14:00", clientName: "Zé", booking: null }),
-      upcomingRow({ id: 2, startTime: "15:00", clientName: "Ana", booking: null }),
-    ],
-    new Date("2026-07-25T10:00:00"),
-    8,
-  );
-
-  assert.equal(rows.length, 2);
-});
-
-test("encaixe manual entra sem serviço nem telefone", () => {
-  const rows = buildUpcoming(
-    [upcomingRow({ clientName: "Encaixe do Zé", booking: null })],
-    new Date("2026-07-25T10:00:00"),
-    8,
-  );
-
-  assert.equal(rows[0].clientName, "Encaixe do Zé");
-  assert.equal(rows[0].clientPhone, null);
-  assert.equal(rows[0].serviceName, null);
 });
 
 test("slot de hoje que já passou não entra em próximas reservas", () => {

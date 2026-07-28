@@ -1,10 +1,12 @@
-import { BadRequestError, ConflictError, NotFoundError } from "../lib/errors";
+import { Role } from "@prisma/client";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
+import { JwtPayload } from "../interfaces/auth";
+import { employeeRepository } from "../repositories/employeeRepository";
 import { availabilityRepository, ScheduleDirection } from "../repositories/availabilityRepository";
 import { planAvailabilities } from "./availabilityGenerator";
 import {
   AvailabilityInput,
   AvailabilityRow,
-  buildAvailabilityData,
   clampPage,
   toAvailabilityDto,
   totalPagesFor,
@@ -44,20 +46,50 @@ async function findOwnedAvailability(
   return availability;
 }
 
-// A trava é o Booking, não o isBooked: um encaixe digitado pelo próprio
-// colaborador precisa continuar corrigível por ele.
+// A trava é o Booking, não o isBooked: só slots com uma Booking real (feita
+// por cliente externo ou atendente via painel) devem ser imutáveis. Checar
+// isBooked sozinho seria muito amplo.
 function assertNotBooked(availability: AvailabilityRow, action: string): void {
   if (availability.booking) {
     throw new ConflictError(`This time slot is booked and cannot be ${action}`);
   }
 }
 
+// ADMIN não tem agenda própria — precisa sempre dizer de quem quer ver.
+// EMPLOYEE sem employeeId cai na própria; com employeeId, pode olhar (e,
+// pela rota de reservas, agendar para) a agenda de um colega do mesmo
+// negócio.
+async function resolveTargetEmployeeId(
+  actor: JwtPayload,
+  employeeIdParam: number | undefined,
+): Promise<number> {
+  if (employeeIdParam === undefined) {
+    if (actor.role !== Role.EMPLOYEE) {
+      throw new BadRequestError("employeeId is required");
+    }
+    return actor.sub;
+  }
+
+  const employee = await employeeRepository.findById(employeeIdParam);
+  if (
+    !employee ||
+    employee.role !== Role.EMPLOYEE ||
+    employee.businessId !== actor.businessId
+  ) {
+    throw new ForbiddenError("You do not have permission to view this schedule");
+  }
+
+  return employeeIdParam;
+}
+
 export const availabilityService = {
   async listAvailabilities(
-    employeeId: number,
+    actor: JwtPayload,
+    employeeIdParam: number | undefined,
     params: { tab: ScheduleDirection; page: number },
     now: Date,
   ) {
+    const employeeId = await resolveTargetEmployeeId(actor, employeeIdParam);
     const PAGE_SIZE = 7;
     const todayStart = businessToday(now);
 
@@ -93,30 +125,17 @@ export const availabilityService = {
     };
   },
 
-  async createAvailability(employeeId: number, input: AvailabilityInput) {
-    validateTimeRange(input);
-
-    const data = buildAvailabilityData(input);
-    const duplicate = await availabilityRepository.findByUniqueSlot(
-      employeeId,
-      data.date,
-      data.startTime,
-    );
-    if (duplicate) {
-      throw new ConflictError("You already have a time slot starting at this time");
-    }
-
-    const created = await availabilityRepository.create(employeeId, data);
-    return toAvailabilityDto(created);
-  },
-
   async updateAvailability(employeeId: number, id: number, input: AvailabilityInput) {
     validateTimeRange(input);
 
     const availability = await findOwnedAvailability(employeeId, id);
     assertNotBooked(availability, "changed");
 
-    const data = buildAvailabilityData(input);
+    const data = {
+      date: new Date(input.date),
+      startTime: input.startTime,
+      endTime: input.endTime,
+    };
     const duplicate = await availabilityRepository.findByUniqueSlot(
       employeeId,
       data.date,

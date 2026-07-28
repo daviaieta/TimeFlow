@@ -9,8 +9,8 @@ function sideOfToday(direction: ScheduleDirection, todayStart: Date) {
   return direction === "upcoming" ? { gte: todayStart } : { lt: todayStart };
 }
 
-// O booking é o que distingue reserva de cliente externo (intocável) de
-// encaixe manual (editável pelo dono).
+// O booking é o que determina se o slot é imutável: quando existe, o slot não
+// pode ser editado ou removido. isBooked sozinho não é suficiente para esse check.
 const withBooking = { booking: { select: { id: true, clientName: true } } };
 
 export const availabilityRepository = {
@@ -116,13 +116,6 @@ export const availabilityRepository = {
   findByUniqueSlot(employeeId: number, date: Date, startTime: string) {
     return prisma.availability.findUnique({
       where: { employeeId_date_startTime: { employeeId, date, startTime } },
-    });
-  },
-
-  create(employeeId: number, data: AvailabilityData) {
-    return prisma.availability.create({
-      data: { ...data, employeeId },
-      include: withBooking,
     });
   },
 

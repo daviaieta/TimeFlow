@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
 import { fetchAdapter } from "@/adapters/fetchAdapter";
-import { saveToken } from "@/lib/auth";
+import { AuthUser, saveToken } from "@/lib/auth";
 
 function GoogleLogo(props: React.ComponentProps<"svg">) {
   return (
@@ -68,7 +68,20 @@ export function LoginForm() {
         body: { email, password },
       });
       saveToken(data.token);
-      router.push("/dashboard");
+
+      // Decide o destino aqui, e não no dashboard: mandar todo mundo para
+      // /dashboard e deixar o layout expulsar quem não pagou faz a tela piscar.
+      const { data: me } = await fetchAdapter<{ user: AuthUser }>({
+        method: "GET",
+        path: "/auth/me",
+      });
+
+      const needsSubscription =
+        me.user.role !== "SUPERADMIN" &&
+        me.user.business !== null &&
+        me.user.business.subscriptionStatus !== "ACTIVE";
+
+      router.push(needsSubscription ? "/assinatura" : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado.");
       setSubmitting(false);
