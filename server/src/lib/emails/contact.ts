@@ -43,7 +43,6 @@ export function sendContactNotificationEmail(
 
 interface ContactAutoReplyInput {
   to: string;
-  name: string;
 }
 
 export function sendContactAutoReplyEmail(
@@ -53,7 +52,10 @@ export function sendContactAutoReplyEmail(
     to: input.to,
     subject: "Recebemos sua mensagem — Time Flow",
     html: renderEmail({
-      heading: `Olá, ${escapeHtml(input.name)}!`,
+      // Sem o nome informado no formulário: qualquer um pode submeter
+      // /public/contact com o e-mail de terceiro e um "name" hostil, e este
+      // e-mail sairia do domínio verificado do Time Flow para essa vítima.
+      heading: "Olá!",
       bodyHtml: `
         <p style="margin: 0 0 12px;">
           Recebi sua mensagem e respondo em até 1 dia útil, pessoalmente.

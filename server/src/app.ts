@@ -24,8 +24,12 @@ export function buildApp(): FastifyInstance {
   const app = fastify({
     // Em produção a API roda atrás do proxy do Railway: sem isso,
     // request.ip é sempre o IP do proxy e o rate limit por IP (ex.: contato)
-    // vira um limite global compartilhado por todo mundo.
-    trustProxy: true,
+    // vira um limite global compartilhado por todo mundo. O valor é 1 (e não
+    // true) para confiar em só um salto — o do próprio proxy do Railway — e
+    // usar o IP que ELE anexou; com `true` o Fastify confia na cadeia inteira
+    // e usa o X-Forwarded-For mais à esquerda, que é escrito pelo cliente,
+    // tornando o rate limit por IP contornável só forjando esse header.
+    trustProxy: 1,
     ajv: {
       customOptions: {
         removeAdditional: true,

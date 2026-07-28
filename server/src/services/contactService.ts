@@ -82,7 +82,7 @@ export const contactService = {
       } else {
         await sendContactNotificationEmail({ to: inbox, ...contact });
       }
-      await sendContactAutoReplyEmail({ to: contact.email, name: contact.name });
+      await sendContactAutoReplyEmail({ to: contact.email });
     } catch (error) {
       console.error(`Falha ao enviar e-mails do contato de ${contact.email}:`, error);
     }

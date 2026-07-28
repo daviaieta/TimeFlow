@@ -13,6 +13,9 @@ interface MailerConfig {
   apiKey: string | null;
   from: string;
   logger?: Pick<Console, "log" | "error">;
+  // Default vem do ambiente real; testes passam o valor explícito para não
+  // depender de NODE_ENV do processo de teste.
+  isProduction?: boolean;
 }
 
 // Fábrica em vez de função solta: é o que permite testar o modo console sem
@@ -20,14 +23,20 @@ interface MailerConfig {
 export function createMailer(config: MailerConfig) {
   const logger = config.logger ?? console;
   const client = config.apiKey ? new Resend(config.apiKey) : null;
+  const isProduction = config.isProduction ?? env.nodeEnv === "production";
 
   return async function send(input: SendMailInput): Promise<void> {
     if (!client) {
       // Modo desenvolvimento: nada sai da máquina. O corpo inteiro polui o
       // terminal, então só o cabeçalho e os links vão para o log.
       logger.log(`[mailer] modo console — para: ${input.to} | assunto: ${input.subject}`);
-      for (const link of extractLinks(input.html)) {
-        logger.log(`[mailer] link: ${link}`);
+      // Em produção isto não deveria acontecer (ver aviso no boot em
+      // server.ts), mas se acontecer, os links — inclusive token de convite —
+      // não podem ir parar no log de produção.
+      if (!isProduction) {
+        for (const link of extractLinks(input.html)) {
+          logger.log(`[mailer] link: ${link}`);
+        }
       }
       return;
     }
