@@ -14,6 +14,17 @@
   # responde 404 em tudo, que foi o que aconteceu no primeiro deploy.
   publish = ".next"
 
+# Declarado à mão de propósito. A Netlify instala este adaptador sozinha
+# quando detecta Next.js, mas a detecção do build procura package.json na
+# RAIZ do repositório — e a nossa raiz não tem nenhum, só server/ e web/ têm.
+# Sem o adaptador, o deploy publica o conteúdo de .next como arquivos
+# estáticos: /BUILD_ID responde 200 e toda rota de verdade responde 404.
+#
+# Sem versão fixada de propósito, seguindo a recomendação do próprio
+# adaptador: ele acompanha as versões novas do Next.js a cada build.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
 [build.environment]
   # Mesma linha do Node que a API usa no Railway. Sem pinar, um upgrade do
   # default da Netlify muda o build sem ninguém pedir.
