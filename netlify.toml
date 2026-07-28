@@ -1,0 +1,16 @@
+# O repositório tem dois projetos (server/ e web/) e só o web vai para a
+# Netlify — a API e o Postgres ficam no Railway. `base` faz a Netlify entrar
+# em web/ antes de instalar e buildar; sem isso ela tentaria buildar a raiz,
+# que não tem package.json.
+[build]
+  base = "web"
+  command = "npm run build"
+
+# O diretório de publicação não é declarado de propósito: o Next.js Runtime
+# da Netlify detecta o framework e resolve isso sozinho. Declarar à mão em
+# monorepo é a origem clássica do erro "web/web/.next".
+
+[build.environment]
+  # Mesma linha do Node que a API usa no Railway. Sem pinar, um upgrade do
+  # default da Netlify muda o build sem ninguém pedir.
+  NODE_VERSION = "22"

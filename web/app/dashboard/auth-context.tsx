@@ -5,6 +5,7 @@ import { AuthUser } from "@/lib/auth";
 
 interface AuthContextValue {
   user: AuthUser;
+  billingEnabled: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -29,4 +30,10 @@ export function useAuthUser(): AuthUser {
 // saber que existe um refresh — nenhuma delas muda.
 export function useRefreshAuthUser(): () => Promise<void> {
   return useAuthContext().refresh;
+}
+
+// Falso durante o período de cortesia: nada de assinatura aparece no painel e
+// ninguém é mandado para /assinatura. Quem manda é o servidor.
+export function useBillingEnabled(): boolean {
+  return useAuthContext().billingEnabled;
 }

@@ -51,8 +51,12 @@ export function buildApp(): FastifyInstance {
   app.register(authRoutes);
   app.register(businessRoutes);
   app.register(contactRoutes);
-  app.register(billingRoutes);
-  app.register(stripeWebhookRoutes);
+  // Com a cobrança desligada não há checkout para abrir nem evento para
+  // receber: as rotas somem em vez de responderem um erro confuso.
+  if (env.billingEnabled) {
+    app.register(billingRoutes);
+    app.register(stripeWebhookRoutes);
+  }
   app.register(dashboardRoutes);
   app.register(serviceRoutes);
   app.register(employeeRoutes);

@@ -4,10 +4,11 @@ import { BillingCard } from "./billing-card";
 import { BusinessCard } from "./business-card";
 import { PasswordCard } from "./password-card";
 import { ProfileCard } from "./profile-card";
-import { useAuthUser } from "../auth-context";
+import { useAuthUser, useBillingEnabled } from "../auth-context";
 
 export default function SettingsPage() {
   const user = useAuthUser();
+  const billingEnabled = useBillingEnabled();
 
   return (
     <div className="mx-auto w-full max-w-3xl">
@@ -24,10 +25,14 @@ export default function SettingsPage() {
         <PasswordCard />
         {user.role === "ADMIN" && user.business ? (
           <>
-            <BillingCard
-              planName={user.business.planName}
-              subscriptionStatus={user.business.subscriptionStatus}
-            />
+            {/* Cobrança desligada: mostrar "Assinatura: sem assinatura ativa"
+                para quem está usando de cortesia só assusta. */}
+            {billingEnabled ? (
+              <BillingCard
+                planName={user.business.planName}
+                subscriptionStatus={user.business.subscriptionStatus}
+              />
+            ) : null}
             <BusinessCard business={user.business} />
           </>
         ) : null}

@@ -149,7 +149,8 @@ export default function ServicesPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <div className="flex items-center justify-between">
+      {/* Empilha no celular: lado a lado, o botão espremeria o título. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Serviços</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -159,7 +160,7 @@ export default function ServicesPage() {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={openCreate}>
+          <Button className="w-full sm:w-auto" onClick={openCreate}>
             <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
             Novo serviço
           </Button>

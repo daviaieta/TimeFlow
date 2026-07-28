@@ -11,7 +11,14 @@ function required(name: string): string {
 
 const webOrigins = parseOrigins(process.env.WEB_ORIGIN);
 
+// Cobrança desligada durante o mês de cortesia do primeiro cliente: nenhum
+// negócio é bloqueado por assinatura e as rotas de checkout não sobem. O
+// default é ligado — desligar tem que ser um ato explícito no provedor, senão
+// um deploy com variável faltando entregaria o produto de graça em silêncio.
+const billingEnabled = process.env.BILLING_ENABLED !== "false";
+
 export const env = {
+  billingEnabled,
   port: Number(process.env.PORT ?? 3333),
   // Em container, o default do Fastify (127.0.0.1) faria o serviço não
   // receber tráfego externo. 0.0.0.0 escuta em todas as interfaces.
@@ -23,7 +30,11 @@ export const env = {
   // usa sempre a primeira — o domínio final, não uma URL de preview.
   webOrigins,
   webOrigin: webOrigins[0],
-  stripeSecretKey: required("STRIPE_SECRET_KEY"),
+  // Só é obrigatória com a cobrança ligada: com ela desligada, exigir a chave
+  // impediria o servidor de subir por causa de um serviço que nem é chamado.
+  stripeSecretKey: billingEnabled
+    ? required("STRIPE_SECRET_KEY")
+    : (process.env.STRIPE_SECRET_KEY ?? ""),
   // Não é required: em desenvolvimento não há webhook configurado, e o fluxo
   // principal de ativação (confirmação no retorno do checkout) não depende
   // dele. Vazio faz constructEvent rejeitar toda chamada — falha fechado, que
