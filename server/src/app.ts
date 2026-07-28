@@ -21,6 +21,10 @@ import "./interfaces/auth";
 // permite testar rotas com app.inject() sem abrir porta.
 export function buildApp(): FastifyInstance {
   const app = fastify({
+    // Em produção a API roda atrás do proxy do Railway: sem isso,
+    // request.ip é sempre o IP do proxy e o rate limit por IP (ex.: contato)
+    // vira um limite global compartilhado por todo mundo.
+    trustProxy: true,
     ajv: {
       customOptions: {
         removeAdditional: true,

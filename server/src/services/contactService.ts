@@ -38,6 +38,21 @@ export const contactService = {
     }
 
     const timestamp = now.getTime();
+    // Varre o mapa inteiro a cada chamada e remove IPs cuja janela zerou:
+    // sem isso, todo IP distinto que já bateu aqui uma vez fica preso no
+    // Map para sempre, e ele cresce sem limite pela vida do processo.
+    for (const [otherIp, timestamps] of hitsByIp) {
+      if (otherIp === ip) {
+        continue;
+      }
+      const pruned = withinWindow(timestamps, timestamp, CONTACT_RATE_LIMIT.windowMs);
+      if (pruned.length === 0) {
+        hitsByIp.delete(otherIp);
+      } else {
+        hitsByIp.set(otherIp, pruned);
+      }
+    }
+
     const previous = hitsByIp.get(ip) ?? [];
     if (isRateLimited(previous, timestamp, CONTACT_RATE_LIMIT)) {
       throw new TooManyRequestsError(
@@ -55,21 +70,20 @@ export const contactService = {
     // é salva some para sempre.
     await contactRepository.create(contact);
 
-    const inbox = await resolveInbox();
-    if (!inbox) {
-      console.error(
-        "Contato recebido sem destino: defina CONTACT_INBOX ou cadastre um SUPERADMIN.",
-      );
-    }
-
+    // A mensagem já está no banco e aparece na caixa do dashboard: nada a
+    // partir daqui — nem resolver o inbox, nem enviar e-mail — pode virar
+    // erro para quem preencheu o formulário.
     try {
-      if (inbox) {
+      const inbox = await resolveInbox();
+      if (!inbox) {
+        console.error(
+          "Contato recebido sem destino: defina CONTACT_INBOX ou cadastre um SUPERADMIN.",
+        );
+      } else {
         await sendContactNotificationEmail({ to: inbox, ...contact });
       }
       await sendContactAutoReplyEmail({ to: contact.email, name: contact.name });
     } catch (error) {
-      // A mensagem já está no banco e aparece na caixa do dashboard: falha de
-      // envio não pode virar erro para quem preencheu o formulário.
       console.error(`Falha ao enviar e-mails do contato de ${contact.email}:`, error);
     }
   },
