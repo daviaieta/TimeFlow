@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "reset-password": "tsx src/scripts/resetUserPassword.ts",
     "test": "node --import tsx --test $(find src prisma -name '*.test.ts' -not -name '*.integration.test.ts')",
     "pretest:integration": "node --import tsx src/test/migrateTestSchema.ts",
     "test:integration": "node --import tsx --test --test-concurrency=1 $(find src -name '*.integration.test.ts')",
