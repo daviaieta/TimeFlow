@@ -2,7 +2,7 @@ import { Business, Role } from "@prisma/client";
 import { env } from "../config/env";
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
 import { generateInviteToken } from "../lib/inviteToken";
-import { sendEmployeeInviteEmail, sendInviteEmail } from "../lib/inviteEmail";
+import { sendEmployeeInviteEmail, sendInviteEmail } from "../lib/emails/invite";
 import { businessRepository } from "../repositories/businessRepository";
 import { userRepository } from "../repositories/userRepository";
 import { canEditBusiness } from "./accountRules";
