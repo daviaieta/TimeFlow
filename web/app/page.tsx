@@ -129,16 +129,14 @@ export default function Home() {
                 <span className="size-3 rounded-full bg-green-400" />
               </div>
               <div className="mx-auto flex h-7 w-full max-w-sm items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-500">
-                timeflow.app/barbearia-old-brothers
+                timeflow/business
               </div>
               <div className="w-12" />
             </div>
 
             <div className="flex">
               <aside className="hidden w-56 shrink-0 border-r border-zinc-100 p-5 sm:block">
-                <p className="text-sm font-semibold text-zinc-900">
-                  Barbearia Old Brothers
-                </p>
+                <p className="text-sm font-semibold text-zinc-900">Business</p>
                 <p className="mt-1 text-xs text-zinc-500">
                   Seg – Sáb · 9h às 19h
                 </p>
@@ -310,6 +308,23 @@ export default function Home() {
                 </a>
               </div>
             ))}
+          </div>
+
+          <div className="mx-auto mt-16 max-w-2xl rounded-2xl bg-indigo-950 px-6 py-10 text-center text-white">
+            <h3 className="text-2xl font-semibold tracking-tight">
+              Ainda em dúvida sobre qual plano?
+            </h3>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-indigo-100">
+              Me conte como sua agenda funciona hoje. Respondo em até 1 dia útil,
+              dizendo se o Time Flow resolve o seu caso.
+            </p>
+            <Link
+              href="/contato"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-indigo-950 transition-colors hover:bg-indigo-50"
+            >
+              Falar com quem fez o produto
+              <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+            </Link>
           </div>
         </div>
       </section>

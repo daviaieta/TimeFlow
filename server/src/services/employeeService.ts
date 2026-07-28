@@ -1,7 +1,7 @@
 import { Role, User } from "@prisma/client";
 import { env } from "../config/env";
 import { ConflictError, NotFoundError } from "../lib/errors";
-import { sendEmployeeInviteEmail } from "../lib/inviteEmail";
+import { sendEmployeeInviteEmail } from "../lib/emails/invite";
 import { generateInviteToken } from "../lib/inviteToken";
 import { businessRepository } from "../repositories/businessRepository";
 import { employeeRepository } from "../repositories/employeeRepository";

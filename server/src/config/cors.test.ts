@@ -31,7 +31,7 @@ async function preflightAllowedMethods(requestedMethod: string): Promise<string[
     .map((method) => method.trim());
 }
 
-for (const method of ["GET", "POST", "PUT", "DELETE"]) {
+for (const method of ["GET", "POST", "PUT", "DELETE", "PATCH"]) {
   test(`preflight libera ${method} para o front`, async () => {
     const allowed = await preflightAllowedMethods(method);
 

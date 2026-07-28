@@ -2,6 +2,15 @@ import { buildApp } from "./app";
 import { env } from "./config/env";
 
 async function start(): Promise<void> {
+  // Variáveis de produção são um passo manual pós-merge: o primeiro deploy
+  // sem RESEND_API_KEY não deve falhar em silêncio — convites e confirmações
+  // de agendamento não seriam entregues e ninguém seria avisado.
+  if (env.nodeEnv === "production" && !env.resendApiKey) {
+    console.error(
+      "[mailer] ATENÇÃO: RESEND_API_KEY não configurada em produção — nenhum e-mail será entregue até que a variável seja definida.",
+    );
+  }
+
   const app = buildApp();
 
   try {

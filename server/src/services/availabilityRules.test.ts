@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Role } from "@prisma/client";
 import {
+  businessDayKey,
   businessToday,
-  clampPage,
+  dayKeyToDate,
+  resolveScheduleTarget,
   toAvailabilityDto,
-  totalPagesFor,
   utcMidnight,
 } from "./availabilityRules";
 
-test("slot livre não tem cliente", () => {
+test("slot livre não tem booking", () => {
   const dto = toAvailabilityDto({
     id: 1,
     date: new Date("2026-07-25T00:00:00.000Z"),
@@ -18,21 +20,28 @@ test("slot livre não tem cliente", () => {
     booking: null,
   });
 
-  assert.equal(dto.clientName, null);
+  assert.equal(dto.booking, null);
   assert.equal(dto.isBooked, false);
 });
 
-test("slot reservado usa o nome do cliente do booking", () => {
+test("slot reservado carrega cliente e serviço do booking", () => {
   const dto = toAvailabilityDto({
     id: 3,
     date: new Date("2026-08-10T00:00:00.000Z"),
     startTime: "11:00",
     endTime: "12:30",
     isBooked: true,
-    booking: { id: 9, clientName: "Cliente Externo" },
+    booking: {
+      id: 9,
+      clientName: "Cliente Externo",
+      clientPhone: "11999998888",
+      clientEmail: null,
+      service: { id: 4, name: "Corte Masculino" },
+    },
   });
 
-  assert.equal(dto.clientName, "Cliente Externo");
+  assert.equal(dto.booking?.clientName, "Cliente Externo");
+  assert.equal(dto.booking?.service.name, "Corte Masculino");
   assert.equal(dto.date, "2026-08-10T00:00:00.000Z");
   assert.equal(dto.isBooked, true);
 });
@@ -59,27 +68,35 @@ test("businessToday na virada da meia-noite local", () => {
   assert.equal(result.toISOString(), "2026-07-25T00:00:00.000Z");
 });
 
-test("totalPagesFor divide exato", () => {
-  assert.equal(totalPagesFor(14, 7), 2);
+test("businessDayKey devolve o dia local do negócio, não o dia UTC", () => {
+  assert.equal(businessDayKey(new Date("2026-07-26T00:30:00.000Z")), "2026-07-25");
 });
 
-test("totalPagesFor arredonda pra cima quando sobra resto", () => {
-  assert.equal(totalPagesFor(15, 7), 3);
+test("dayKeyToDate ancora o dia em meia-noite UTC", () => {
+  assert.equal(dayKeyToDate("2026-07-25").toISOString(), "2026-07-25T00:00:00.000Z");
 });
 
-test("totalPagesFor sem dia nenhum ainda devolve 1 página", () => {
-  assert.equal(totalPagesFor(0, 7), 1);
+test("EMPLOYEE sem employeeId cai na própria agenda", () => {
+  const target = resolveScheduleTarget({ sub: 7, role: Role.EMPLOYEE }, undefined);
+  assert.deepEqual(target, { allowed: true, employeeId: 7 });
 });
 
-test("clampPage abaixo de 1 vira 1", () => {
-  assert.equal(clampPage(0, 3), 1);
-  assert.equal(clampPage(-5, 3), 1);
+test("EMPLOYEE pedindo a própria agenda explicitamente é permitido", () => {
+  const target = resolveScheduleTarget({ sub: 7, role: Role.EMPLOYEE }, 7);
+  assert.deepEqual(target, { allowed: true, employeeId: 7 });
 });
 
-test("clampPage acima do total vira o total", () => {
-  assert.equal(clampPage(9, 3), 3);
+test("EMPLOYEE não pode pedir a agenda de um colega", () => {
+  const target = resolveScheduleTarget({ sub: 7, role: Role.EMPLOYEE }, 8);
+  assert.deepEqual(target, { allowed: false, reason: "forbidden" });
 });
 
-test("clampPage dentro do range não muda", () => {
-  assert.equal(clampPage(2, 3), 2);
+test("ADMIN sem employeeId não tem agenda própria pra cair", () => {
+  const target = resolveScheduleTarget({ sub: 1, role: Role.ADMIN }, undefined);
+  assert.deepEqual(target, { allowed: false, reason: "employee-id-required" });
+});
+
+test("ADMIN pode pedir a agenda de qualquer colaborador", () => {
+  const target = resolveScheduleTarget({ sub: 1, role: Role.ADMIN }, 8);
+  assert.deepEqual(target, { allowed: true, employeeId: 8 });
 });

@@ -1,3 +1,5 @@
+import { Role } from "@prisma/client";
+
 export interface AvailabilityInput {
   date: string;
   startTime: string;
@@ -10,13 +12,21 @@ export interface AvailabilityData {
   endTime: string;
 }
 
+export interface BookingSummary {
+  id: number;
+  clientName: string;
+  clientPhone: string;
+  clientEmail: string | null;
+  service: { id: number; name: string };
+}
+
 export interface AvailabilityRow {
   id: number;
   date: Date;
   startTime: string;
   endTime: string;
   isBooked: boolean;
-  booking: { id: number; clientName: string } | null;
+  booking: BookingSummary | null;
 }
 
 export interface AvailabilityDto {
@@ -25,9 +35,12 @@ export interface AvailabilityDto {
   startTime: string;
   endTime: string;
   isBooked: boolean;
-  clientName: string | null;
+  booking: BookingSummary | null;
 }
 
+// O booking sai inteiro, e não achatado num clientName: uma reserva mais longa
+// que o slot ocupa vários slots seguidos, e é o `booking.id` repetido que deixa
+// a timeline colapsar todos eles num evento só.
 export function toAvailabilityDto(row: AvailabilityRow): AvailabilityDto {
   return {
     id: row.id,
@@ -35,7 +48,7 @@ export function toAvailabilityDto(row: AvailabilityRow): AvailabilityDto {
     startTime: row.startTime,
     endTime: row.endTime,
     isBooked: row.isBooked,
-    clientName: row.booking?.clientName ?? null,
+    booking: row.booking,
   };
 }
 
@@ -60,10 +73,39 @@ export function businessToday(now: Date): Date {
   return new Date(`${isoDate}T00:00:00.000Z`);
 }
 
-export function totalPagesFor(totalDays: number, pageSize: number): number {
-  return Math.max(1, Math.ceil(totalDays / pageSize));
+// "YYYY-MM-DD" pro dia que a agenda abre por padrão, no fuso do negócio.
+export function businessDayKey(now: Date): string {
+  return businessToday(now).toISOString().slice(0, 10);
 }
 
-export function clampPage(page: number, totalPages: number): number {
-  return Math.min(Math.max(1, page), totalPages);
+// O `date` gravado é meia-noite UTC — um marcador de dia, não um instante.
+// Comparar com qualquer outra hora erraria o dia.
+export function dayKeyToDate(dayKey: string): Date {
+  return new Date(`${dayKey}T00:00:00.000Z`);
+}
+
+export type ScheduleTarget =
+  | { allowed: true; employeeId: number }
+  | { allowed: false; reason: "employee-id-required" | "forbidden" };
+
+// De quem é a agenda que o ator pode abrir. EMPLOYEE enxerga só a própria:
+// sem employeeId cai nela, e pedir a de um colega é negado — a agenda é onde
+// se registram os horários de trabalho, e ninguém registra os do outro.
+// ADMIN não tem agenda própria, então precisa sempre dizer de quem quer ver.
+export function resolveScheduleTarget(
+  actor: { sub: number; role: Role },
+  employeeIdParam: number | undefined,
+): ScheduleTarget {
+  if (actor.role === Role.EMPLOYEE) {
+    if (employeeIdParam === undefined || employeeIdParam === actor.sub) {
+      return { allowed: true, employeeId: actor.sub };
+    }
+    return { allowed: false, reason: "forbidden" };
+  }
+
+  if (employeeIdParam === undefined) {
+    return { allowed: false, reason: "employee-id-required" };
+  }
+
+  return { allowed: true, employeeId: employeeIdParam };
 }

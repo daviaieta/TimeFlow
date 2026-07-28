@@ -10,6 +10,7 @@ import { authRoutes } from "./routes/authRoutes";
 import { billingRoutes, stripeWebhookRoutes } from "./routes/billingRoutes";
 import { bookingRoutes } from "./routes/bookingRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
+import { contactRoutes } from "./routes/contactRoutes";
 import { dashboardRoutes } from "./routes/dashboardRoutes";
 import { employeeRoutes } from "./routes/employeeRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
@@ -21,6 +22,14 @@ import "./interfaces/auth";
 // permite testar rotas com app.inject() sem abrir porta.
 export function buildApp(): FastifyInstance {
   const app = fastify({
+    // Em produção a API roda atrás do proxy do Railway: sem isso,
+    // request.ip é sempre o IP do proxy e o rate limit por IP (ex.: contato)
+    // vira um limite global compartilhado por todo mundo. O valor é 1 (e não
+    // true) para confiar em só um salto — o do próprio proxy do Railway — e
+    // usar o IP que ELE anexou; com `true` o Fastify confia na cadeia inteira
+    // e usa o X-Forwarded-For mais à esquerda, que é escrito pelo cliente,
+    // tornando o rate limit por IP contornável só forjando esse header.
+    trustProxy: 1,
     ajv: {
       customOptions: {
         removeAdditional: true,
@@ -41,6 +50,7 @@ export function buildApp(): FastifyInstance {
   app.register(healthRoutes);
   app.register(authRoutes);
   app.register(businessRoutes);
+  app.register(contactRoutes);
   app.register(billingRoutes);
   app.register(stripeWebhookRoutes);
   app.register(dashboardRoutes);

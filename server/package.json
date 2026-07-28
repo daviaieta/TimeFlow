@@ -14,7 +14,7 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "test": "node --import tsx --test src/**/*.test.ts prisma/*.test.ts"
+    "test": "node --import tsx --test $(find src prisma -name '*.test.ts')"
   },
   "keywords": [
     "fastify",
@@ -36,13 +36,12 @@
     "bcrypt": "^6.0.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0",
-    "nodemailer": "^9.0.3",
+    "resend": "^6.18.0",
     "stripe": "^22.3.2"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.10.2",
-    "@types/nodemailer": "^8.0.1",
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

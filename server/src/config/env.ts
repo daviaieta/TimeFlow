@@ -29,4 +29,10 @@ export const env = {
   // dele. Vazio faz constructEvent rejeitar toda chamada — falha fechado, que
   // é o comportamento certo.
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  // Sem chave, o mailer entra em modo console: nada é enviado de verdade.
+  resendApiKey: process.env.RESEND_API_KEY ?? null,
+  mailFrom: process.env.MAIL_FROM ?? '"Time Flow" <no-reply@timeflow.com>',
+  // Destino das notificações de contato. Sem valor, o serviço cai no e-mail
+  // do SUPERADMIN cadastrado no banco.
+  contactInbox: process.env.CONTACT_INBOX ?? null,
 };

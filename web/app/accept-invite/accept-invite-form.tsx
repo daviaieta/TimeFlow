@@ -25,14 +25,11 @@ export function AcceptInviteForm() {
   if (!token) {
     return (
       <div className="flex flex-col items-center gap-3 text-center">
-        <HugeiconsIcon
-          icon={Alert01Icon}
-          className="size-8 text-destructive"
-        />
+        <HugeiconsIcon icon={Alert01Icon} className="size-8 text-destructive" />
         <p className="font-medium">Convite inválido</p>
         <p className="text-sm text-muted-foreground">
-          Este link não contém um convite. Verifique o e-mail que você recebeu
-          e use o link completo.
+          Este link não contém um convite. Verifique o e-mail que você recebeu e
+          use o link completo.
         </p>
       </div>
     );
@@ -75,7 +72,7 @@ export function AcceptInviteForm() {
       });
       saveToken(data.token);
       setStatus("success");
-      setTimeout(() => router.push("/dashboard"), 1500);
+      setTimeout(() => router.push("/assinatura"), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado.");
       setStatus("idle");

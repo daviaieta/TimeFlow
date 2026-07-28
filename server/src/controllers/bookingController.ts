@@ -8,6 +8,7 @@ export async function createBooking(
   reply: FastifyReply,
 ): Promise<void> {
   const booking = await internalBookingService.createBooking(
+    request.user,
     requireBusinessId(request),
     request.body,
     new Date(),

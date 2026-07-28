@@ -85,4 +85,13 @@ export const userRepository = {
       select: { id: true, name: true, email: true, role: true, businessId: true },
     });
   },
+
+  // Fallback do destino de contato quando CONTACT_INBOX não está definida.
+  findFirstSuperadmin() {
+    return prisma.user.findFirst({
+      where: { role: Role.SUPERADMIN },
+      orderBy: { id: "asc" },
+      select: { email: true },
+    });
+  },
 };

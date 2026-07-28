@@ -34,6 +34,12 @@ enum BookingSource {
   INTERNAL
 }
 
+enum ContactStatus {
+  NEW
+  READ
+  ARCHIVED
+}
+
 model Business {
   id        Int      @id @default(autoincrement())
   name      String
@@ -137,4 +143,22 @@ model Booking {
   serviceId Int
 
   availabilities Availability[]
+}
+
+// Mensagens do formulário público da landing. Sem relação com Business: quem
+// escreve ainda não é cliente — é justamente esse o ponto do formulário.
+model ContactMessage {
+  id           Int           @id @default(autoincrement())
+  name         String
+  email        String
+  phone        String?
+  // Faixa ("1", "2-5", "6+"), não contagem exata: é o que o formulário pergunta.
+  teamSize     String?
+  businessName String?
+  message      String
+  status       ContactStatus @default(NEW)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([status, createdAt])
 }

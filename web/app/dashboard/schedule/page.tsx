@@ -1,15 +1,9 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  Calendar03Icon,
-  CheckmarkCircle02Icon,
-  Delete02Icon,
-  PencilEdit02Icon,
-} from "@hugeicons/core-free-icons";
+import { Calendar03Icon } from "@hugeicons/core-free-icons";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -22,16 +16,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
   Select,
   SelectContent,
   SelectGroup,
@@ -40,25 +24,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Availability, Employee } from "@/lib/types";
 import { formatBusinessName } from "@/lib/businessName";
-import { estimateGeneratedSlots } from "@/lib/generatePlan";
-import {
-  formatDuration,
-  formatMinutes,
-  groupByDate,
-  localDayKey,
-  orderDayGroups,
-  summarizeDay,
-  toMinutes,
-} from "@/lib/schedule";
+import { localDayKey } from "@/lib/schedule";
+import { buildTimeline, summarizeTimeline, type TimelineEvent } from "@/lib/timeline";
+import type { Availability, Employee } from "@/lib/types";
 import { useAuthUser } from "../auth-context";
+import { BookingDialog } from "./booking-dialog";
+import { DayNavigator } from "./day-navigator";
+import { EditSlotDialog } from "./edit-slot-dialog";
+import { EventDetailsDialog } from "./event-details-dialog";
+import { GenerateDialog } from "./generate-dialog";
+import { Timeline } from "./timeline";
 
-// Índices batem com Date.getUTCDay() / o weekdays da API (0=dom … 6=sáb)
-const WEEKDAY_LABELS = ["D", "S", "T", "Q", "Q", "S", "S"];
-
-function formatDate(isoDate: string): string {
-  return new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR", {
+function formatDayLabel(dayKey: string): string {
+  return new Date(`${dayKey}T00:00:00`).toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "2-digit",
     month: "long",
@@ -68,85 +47,56 @@ function formatDate(isoDate: string): string {
 export default function SchedulePage() {
   const user = useAuthUser();
 
+  // Relógio da tela: alimenta a linha do "agora" e a marcação de passado. Um
+  // tick por minuto basta — a agenda tem granularidade de minutos.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const todayKey = localDayKey(now);
+  const [dayKey, setDayKey] = useState(() => localDayKey(new Date()));
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
     user.role === "EMPLOYEE" ? user.id : null,
   );
 
-  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
+  const [slots, setSlots] = useState<Availability[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Availability | null>(null);
-  const [date, setDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const [genOpen, setGenOpen] = useState(false);
-  const [genStart, setGenStart] = useState("");
-  const [genEnd, setGenEnd] = useState("");
-  const [genDays, setGenDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [genWorkStart, setGenWorkStart] = useState("09:00");
-  const [genWorkEnd, setGenWorkEnd] = useState("18:00");
-  const [genBreak, setGenBreak] = useState(true);
-  const [genBreakStart, setGenBreakStart] = useState("12:00");
-  const [genBreakEnd, setGenBreakEnd] = useState("13:00");
-  const [genSlotMinutes, setGenSlotMinutes] = useState(30);
-  const [genError, setGenError] = useState<string | null>(null);
-  const [genSubmitting, setGenSubmitting] = useState(false);
-  const [genResult, setGenResult] = useState<{ created: number; skipped: number } | null>(
-    null,
-  );
-
-  const [deleting, setDeleting] = useState<Availability | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deletingSubmitting, setDeletingSubmitting] = useState(false);
-
+  const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [bookingSlot, setBookingSlot] = useState<Availability | null>(null);
-  const [bookingServiceId, setBookingServiceId] = useState("");
-  const [bookingClientName, setBookingClientName] = useState("");
-  const [bookingClientPhone, setBookingClientPhone] = useState("");
-  const [bookingClientEmail, setBookingClientEmail] = useState("");
-  const [bookingError, setBookingError] = useState<string | null>(null);
-  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [editingSlot, setEditingSlot] = useState<Availability | null>(null);
+  const [deletingSlot, setDeletingSlot] = useState<Availability | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [openEvent, setOpenEvent] = useState<TimelineEvent | null>(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
 
-  const loadAvailabilities = useCallback(() => {
-    // Todo o corpo roda num .then() (não direto no corpo do effect) pra não
-    // disparar o lint de setState síncrono dentro de useEffect — isso cobre
-    // tanto o setLoading(true) inicial (evita o "flash" da agenda do
-    // colaborador anterior ao trocar de seleção) quanto o branch abaixo.
+  const nowRef = useRef<HTMLDivElement | null>(null);
+  const scrolledFor = useRef<string | null>(null);
+
+  const loadDay = useCallback(() => {
+    // O corpo roda dentro de um .then() pra não disparar o lint de setState
+    // síncrono dentro de effect — vale tanto pro setLoading(true) quanto pro
+    // atalho de "nenhum colaborador selecionado".
     return Promise.resolve().then(() => {
       setLoading(true);
 
       if (selectedEmployeeId === null) {
-        // Ainda não há colaborador selecionado (ex.: negócio sem nenhum
-        // colaborador, ou a busca de /employees falhou) — sem isso, o
-        // spinner inicial (loading = true) nunca seria desligado.
         setLoading(false);
         return undefined;
       }
 
-      return fetchAdapter<{
-        availabilities: Availability[];
-        page: number;
-        totalPages: number;
-      }>({
+      return fetchAdapter<{ date: string; availabilities: Availability[] }>({
         method: "GET",
-        path: `/availabilities?employeeId=${selectedEmployeeId}&tab=${tab}&page=${page}`,
+        path: `/availabilities?employeeId=${selectedEmployeeId}&date=${dayKey}`,
       })
         .then(({ data }) => {
-          setAvailabilities(data.availabilities);
-          // O servidor clampa a página fora do intervalo válido (ex.: excluiu o
-          // último horário da última página) — sincronizar em vez de confiar
-          // no que foi pedido evita a tela ficar presa numa página inexistente.
-          setPage(data.page);
-          setTotalPages(data.totalPages);
+          setSlots(data.availabilities);
           setListError(null);
         })
         .catch((err) => {
@@ -156,11 +106,11 @@ export default function SchedulePage() {
           setLoading(false);
         });
     });
-  }, [selectedEmployeeId, tab, page]);
+  }, [selectedEmployeeId, dayKey]);
 
   useEffect(() => {
-    loadAvailabilities();
-  }, [loadAvailabilities]);
+    loadDay();
+  }, [loadDay]);
 
   useEffect(() => {
     fetchAdapter<{ employees: Employee[] }>({ method: "GET", path: "/employees" })
@@ -169,697 +119,216 @@ export default function SchedulePage() {
         setSelectedEmployeeId((current) => current ?? data.employees[0]?.id ?? null);
       })
       .catch(() => {
-        // Lista de funcionários é só pro seletor — se falhar, a tela já
-        // mostra o erro de carregar a agenda em seguida.
+        // A lista serve só ao seletor: se falhar, o erro de carregar a agenda
+        // já aparece logo abaixo.
       });
   }, []);
 
-  function selectTab(next: "upcoming" | "past") {
-    setTab(next);
-    setPage(1);
-  }
+  const items = useMemo(() => buildTimeline(slots, dayKey, now), [slots, dayKey, now]);
+  const summary = summarizeTimeline(items);
 
-  function openEdit(availability: Availability) {
-    setEditing(availability);
-    setDate(availability.date.slice(0, 10));
-    setStartTime(availability.startTime);
-    setEndTime(availability.endTime);
-    setFormError(null);
-    setDialogOpen(true);
-  }
+  // Abrir hoje já posiciona a tela no horário atual: o barbeiro chega no
+  // "agora" sem rolar. Só uma vez por dia carregado, senão o tick do relógio
+  // roubaria o scroll a cada minuto.
+  useEffect(() => {
+    if (loading || dayKey !== todayKey || scrolledFor.current === dayKey) return;
+    const marker = nowRef.current;
+    if (!marker) return;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError(null);
-    setSubmitting(true);
+    scrolledFor.current = dayKey;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    marker.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+  }, [loading, dayKey, todayKey, items]);
 
-    const body = { date, startTime, endTime };
+  const isOwnAgenda = selectedEmployeeId === user.id;
+  const canPickEmployee = user.role !== "EMPLOYEE";
+  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId);
+  const dayLabel = formatDayLabel(dayKey);
 
-    try {
-      await fetchAdapter({
-        method: "PUT",
-        path: `/availabilities/${editing?.id}`,
-        body,
-      });
-      setDialogOpen(false);
-      await loadAvailabilities();
-    } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Erro inesperado.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function openGenerate() {
-    const today = new Date();
-    const inThirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-    setGenStart(localDayKey(today));
-    setGenEnd(localDayKey(inThirtyDays));
-    setGenError(null);
-    setGenResult(null);
-    setGenOpen(true);
-  }
-
-  function toggleGenDay(day: number) {
-    setGenDays((current) =>
-      current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort(),
-    );
-  }
-
-  async function handleGenerate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setGenError(null);
-    setGenSubmitting(true);
-
-    try {
-      const { data } = await fetchAdapter<{ created: number; skipped: number }>({
-        method: "POST",
-        path: "/availabilities/generate",
-        body: {
-          startDate: genStart,
-          endDate: genEnd,
-          weekdays: genDays,
-          workStart: genWorkStart,
-          workEnd: genWorkEnd,
-          slotMinutes: genSlotMinutes,
-          ...(genBreak ? { breakStart: genBreakStart, breakEnd: genBreakEnd } : {}),
-        },
-      });
-      setGenResult(data);
-    } catch (err) {
-      setGenError(err instanceof ApiError ? err.message : "Erro inesperado.");
-    } finally {
-      setGenSubmitting(false);
-    }
-  }
-
-  async function closeGenerate() {
-    setGenOpen(false);
-    if (genResult && genResult.created > 0) {
-      await loadAvailabilities();
-    }
+  function goToDay(next: string) {
+    setDayKey(next);
+    setSelectedSlotId(null);
   }
 
   async function handleDelete() {
-    if (!deleting) return;
+    if (!deletingSlot) return;
     setDeleteError(null);
-    setDeletingSubmitting(true);
+    setDeleteSubmitting(true);
 
     try {
-      await fetchAdapter({
-        method: "DELETE",
-        path: `/availabilities/${deleting.id}`,
-      });
-      setDeleting(null);
-      await loadAvailabilities();
+      await fetchAdapter({ method: "DELETE", path: `/availabilities/${deletingSlot.id}` });
+      setDeletingSlot(null);
+      await loadDay();
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : "Erro inesperado.");
     } finally {
-      setDeletingSubmitting(false);
+      setDeleteSubmitting(false);
     }
   }
-
-  function openBooking(slot: Availability) {
-    setBookingSlot(slot);
-    setBookingServiceId("");
-    setBookingClientName("");
-    setBookingClientPhone("");
-    setBookingClientEmail("");
-    setBookingError(null);
-  }
-
-  async function handleBookingSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!bookingSlot) return;
-
-    setBookingError(null);
-    setBookingSubmitting(true);
-
-    try {
-      await fetchAdapter({
-        method: "POST",
-        path: "/bookings",
-        body: {
-          availabilityId: bookingSlot.id,
-          serviceId: Number(bookingServiceId),
-          clientName: bookingClientName.trim(),
-          clientPhone: bookingClientPhone.trim(),
-          ...(bookingClientEmail.trim() ? { clientEmail: bookingClientEmail.trim() } : {}),
-        },
-      });
-      setBookingSlot(null);
-      await loadAvailabilities();
-    } catch (err) {
-      setBookingError(err instanceof ApiError ? err.message : "Erro inesperado.");
-    } finally {
-      setBookingSubmitting(false);
-    }
-  }
-
-  const todayKey = localDayKey(new Date());
-  const dayGroups = orderDayGroups(groupByDate(availabilities), tab);
-  const isOwnAgenda = selectedEmployeeId === user.id;
-  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId);
-  const bookableServices = selectedEmployee?.services ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-4xl pb-16">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           {user.business && (
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <p className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
               {formatBusinessName(user.business.name)}
             </p>
           )}
-          <h1 className="mt-0.5 text-xl font-semibold tracking-tight">Agenda</h1>
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight capitalize">
+            {dayLabel}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gerencie seus horários disponíveis para agendamento.
+            {dayKey === todayKey ? "Hoje · " : ""}
+            {summary.label}
           </p>
         </div>
-        <Select
-          items={employees.map((employee) => ({
-            value: String(employee.id),
-            label: employee.id === user.id ? "Eu" : employee.name,
-          }))}
-          value={selectedEmployeeId ? String(selectedEmployeeId) : ""}
-          onValueChange={(value) => {
-            setSelectedEmployeeId(Number(value));
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Escolha um colaborador" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {employees.map((employee) => (
-                <SelectItem key={employee.id} value={String(employee.id)}>
-                  {employee.id === user.id ? "Eu" : employee.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <div className="flex shrink-0 gap-2">
+
+        <div className="flex flex-wrap items-center gap-2">
+          {canPickEmployee && (
+            <Select
+              items={employees.map((employee) => ({
+                value: String(employee.id),
+                label: employee.name,
+              }))}
+              value={selectedEmployeeId ? String(selectedEmployeeId) : ""}
+              onValueChange={(value) => setSelectedEmployeeId(Number(value))}
+            >
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <SelectValue placeholder="Escolha um colaborador" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee.id} value={String(employee.id)}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
           {isOwnAgenda && (
-            <Button variant="outline" onClick={openGenerate}>
+            <Button variant="outline" size="sm" onClick={() => setGenerateOpen(true)}>
               <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
               Gerar horários
             </Button>
           )}
         </div>
+      </header>
+
+      <div className="mt-5 flex justify-end">
+        <DayNavigator dayKey={dayKey} todayKey={todayKey} onChange={goToDay} />
       </div>
 
-      <div className="mt-6 inline-flex rounded-lg border bg-card p-0.5 text-sm">
-        <button
-          type="button"
-          onClick={() => selectTab("upcoming")}
-          className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
-            tab === "upcoming"
-              ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Próximos
-        </button>
-        <button
-          type="button"
-          onClick={() => selectTab("past")}
-          className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
-            tab === "past"
-              ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Passados
-        </button>
-      </div>
-
-      <div className="mt-6 flex flex-col gap-5">
+      <div className="mt-6">
         {loading ? (
-          <div className="flex items-center justify-center rounded-2xl border bg-card p-12">
+          <div className="flex items-center justify-center py-24">
             <Spinner />
           </div>
         ) : listError ? (
-          <p className="rounded-2xl border bg-card p-12 text-center text-sm text-destructive">
-            {listError}
-          </p>
+          <p className="py-24 text-center text-sm text-destructive">{listError}</p>
         ) : selectedEmployeeId === null ? (
-          <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
+          <p className="py-24 text-center text-sm text-muted-foreground">
             {employees.length === 0
               ? "Nenhum colaborador cadastrado ainda."
-              : "Selecione um colaborador para ver a agenda."}
+              : "Escolha um colaborador para ver a agenda."}
           </p>
-        ) : dayGroups.length === 0 ? (
-          <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
-            {tab === "past"
-              ? "Nenhum horário passado."
-              : "Nenhum horário à frente. Crie seus horários livres para que clientes possam reservar."}
-          </p>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center gap-4 py-24 text-center">
+            <p className="text-sm text-muted-foreground">
+              Nenhum horário neste dia.
+            </p>
+            {isOwnAgenda && (
+              <Button variant="outline" size="sm" onClick={() => setGenerateOpen(true)}>
+                <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
+                Gerar horários
+              </Button>
+            )}
+          </div>
         ) : (
-          dayGroups.map(([day, slots]) => {
-            const resumo = summarizeDay(slots);
-            const isToday = day === todayKey;
-
-            return (
-              <section key={day} className="overflow-hidden rounded-2xl border bg-card">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3.5">
-                  <h2 className="text-sm font-semibold capitalize">
-                    {isToday && (
-                      <span className="text-indigo-600 dark:text-indigo-400">HOJE · </span>
-                    )}
-                    {formatDate(day)}
-                  </h2>
-                  <span className="text-xs text-muted-foreground">{resumo.label}</span>
-                </div>
-
-                <div className="px-5 py-4">
-                  {slots.map((slot, index) => {
-                    const previous = slots[index - 1];
-                    const gap = previous
-                      ? toMinutes(slot.startTime) - toMinutes(previous.endTime)
-                      : 0;
-
-                    return (
-                      <div key={slot.id}>
-                        {gap > 0 && (
-                          <div className="grid grid-cols-[56px_1fr] gap-3">
-                            <div className="pt-1 text-right text-[11px] text-muted-foreground/40">
-                              ···
-                            </div>
-                            <div className="border-l-2 border-dotted py-2 pl-4 text-xs text-muted-foreground/60">
-                              {formatMinutes(gap)} sem horários cadastrados
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-[56px_1fr] gap-3">
-                          <div className="pt-2.5 text-right text-[11px] tabular-nums text-muted-foreground">
-                            {slot.startTime}
-                          </div>
-                          <div className="relative border-l-2 pb-3 pl-4">
-                            <span className="absolute -left-[5px] top-3 size-2 rounded-full bg-border" />
-                            <div
-                              className={`flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 ${
-                                slot.isBooked
-                                  ? "border border-l-[3px] border-indigo-500/35 border-l-indigo-500 bg-indigo-500/10"
-                                  : "border border-dashed"
-                              }`}
-                            >
-                              <div className="min-w-0">
-                                <p
-                                  className={`truncate text-sm font-semibold ${
-                                    slot.isBooked ? "" : "text-muted-foreground/60"
-                                  }`}
-                                >
-                                  {slot.clientName ?? "Livre"}
-                                </p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">
-                                  {slot.startTime} – {slot.endTime} ·{" "}
-                                  {formatDuration(slot.startTime, slot.endTime)}
-                                </p>
-                              </div>
-
-                              {slot.isBooked ? (
-                                <Badge>Reservado</Badge>
-                              ) : (
-                                <div className="flex shrink-0 gap-1">
-                                  {tab === "upcoming" && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => openBooking(slot)}
-                                    >
-                                      Reservar
-                                    </Button>
-                                  )}
-                                  {isOwnAgenda && (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label="Editar horário"
-                                        onClick={() => openEdit(slot)}
-                                      >
-                                        <HugeiconsIcon icon={PencilEdit02Icon} />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label="Excluir horário"
-                                        onClick={() => {
-                                          setDeleteError(null);
-                                          setDeleting(slot);
-                                        }}
-                                      >
-                                        <HugeiconsIcon icon={Delete02Icon} />
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })
+          <div
+            key={dayKey}
+            className="duration-200 motion-safe:animate-in motion-safe:fade-in"
+          >
+            <Timeline
+              items={items}
+              selectedSlotId={selectedSlotId}
+              canManage={isOwnAgenda}
+              nowRef={nowRef}
+              onSelectSlot={setSelectedSlotId}
+              onBook={(item) => setBookingSlot(item.slot)}
+              onEdit={(item) => setEditingSlot(item.slot)}
+              onDelete={(item) => {
+                setDeleteError(null);
+                setDeletingSlot(item.slot);
+              }}
+              onOpenEvent={setOpenEvent}
+            />
+          </div>
         )}
       </div>
 
-      {!loading && !listError && totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-center gap-3 text-sm">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page === 1}
-            onClick={() => setPage((current) => current - 1)}
-          >
-            Anterior
-          </Button>
-          <span className="text-muted-foreground">
-            Página {page} de {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page === totalPages}
-            onClick={() => setPage((current) => current + 1)}
-          >
-            Próxima
-          </Button>
-        </div>
+      {generateOpen && (
+        <GenerateDialog
+          fromDayKey={dayKey}
+          onClose={() => setGenerateOpen(false)}
+          onGenerated={loadDay}
+        />
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar horário</DialogTitle>
-            <DialogDescription>
-              Defina o dia e o intervalo em que você está disponível.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="slot-date">Data</FieldLabel>
-                <Input
-                  id="slot-date"
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  required
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-4">
-                <Field>
-                  <FieldLabel htmlFor="slot-start">Início</FieldLabel>
-                  <Input
-                    id="slot-start"
-                    type="time"
-                    value={startTime}
-                    onChange={(event) => setStartTime(event.target.value)}
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="slot-end">Fim</FieldLabel>
-                  <Input
-                    id="slot-end"
-                    type="time"
-                    value={endTime}
-                    onChange={(event) => setEndTime(event.target.value)}
-                    required
-                  />
-                </Field>
-              </div>
-              {formError && <FieldError>{formError}</FieldError>}
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? (
-                    <>
-                      <Spinner data-icon="inline-start" />
-                      Salvando…
-                    </>
-                  ) : (
-                    "Salvar"
-                  )}
-                </Button>
-              </DialogFooter>
-            </FieldGroup>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {editingSlot && (
+        <EditSlotDialog
+          key={editingSlot.id}
+          slot={editingSlot}
+          onClose={() => setEditingSlot(null)}
+          onSaved={loadDay}
+        />
+      )}
 
-      <Dialog
-        open={genOpen}
-        onOpenChange={(open) => {
-          if (!open) void closeGenerate();
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Gerar horários</DialogTitle>
-            <DialogDescription>
-              Informe sua jornada e o sistema cria todos os horários do período
-              de uma vez.
-            </DialogDescription>
-          </DialogHeader>
+      {bookingSlot && (
+        <BookingDialog
+          key={bookingSlot.id}
+          slotId={bookingSlot.id}
+          slotLabel={`${dayLabel} · ${bookingSlot.startTime}`}
+          services={selectedEmployee?.services ?? []}
+          onClose={() => setBookingSlot(null)}
+          onBooked={loadDay}
+        />
+      )}
 
-          {genResult ? (
-            <div className="flex flex-col items-center gap-3 py-4 text-center">
-              <div className="flex size-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-6" />
-              </div>
-              <p className="text-sm">
-                <span className="font-semibold">{genResult.created}</span> horários
-                criados
-                {genResult.skipped > 0 && (
-                  <>
-                    {" · "}
-                    <span className="text-muted-foreground">
-                      {genResult.skipped} pulados
-                    </span>
-                  </>
-                )}
-              </p>
-              {genResult.skipped > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Pulados são horários que já existiam ou que conflitam com
-                  outros na sua agenda.
-                </p>
-              )}
-              <Button className="mt-2" onClick={() => void closeGenerate()}>
-                Fechar
-              </Button>
-            </div>
-          ) : (
-            <form onSubmit={handleGenerate}>
-              <FieldGroup>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel htmlFor="gen-start">De</FieldLabel>
-                    <Input
-                      id="gen-start"
-                      type="date"
-                      value={genStart}
-                      onChange={(event) => setGenStart(event.target.value)}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="gen-end">Até</FieldLabel>
-                    <Input
-                      id="gen-end"
-                      type="date"
-                      value={genEnd}
-                      onChange={(event) => setGenEnd(event.target.value)}
-                      required
-                    />
-                  </Field>
-                </div>
-
-                <Field>
-                  <FieldLabel>Dias da semana</FieldLabel>
-                  <div className="flex gap-1.5">
-                    {WEEKDAY_LABELS.map((label, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        aria-pressed={genDays.includes(index)}
-                        onClick={() => toggleGenDay(index)}
-                        className={`size-9 rounded-lg border text-xs font-semibold transition-colors ${
-                          genDays.includes(index)
-                            ? "border-indigo-500 bg-indigo-500 text-white"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel htmlFor="gen-work-start">Entrada</FieldLabel>
-                    <Input
-                      id="gen-work-start"
-                      type="time"
-                      value={genWorkStart}
-                      onChange={(event) => setGenWorkStart(event.target.value)}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="gen-work-end">Saída</FieldLabel>
-                    <Input
-                      id="gen-work-end"
-                      type="time"
-                      value={genWorkEnd}
-                      onChange={(event) => setGenWorkEnd(event.target.value)}
-                      required
-                    />
-                  </Field>
-                </div>
-
-                <Field>
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={genBreak}
-                      onChange={(event) => setGenBreak(event.target.checked)}
-                      className="size-4 accent-indigo-500"
-                    />
-                    Pausa para almoço
-                  </label>
-                </Field>
-
-                {genBreak && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field>
-                      <FieldLabel htmlFor="gen-break-start">Início da pausa</FieldLabel>
-                      <Input
-                        id="gen-break-start"
-                        type="time"
-                        value={genBreakStart}
-                        onChange={(event) => setGenBreakStart(event.target.value)}
-                        required
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="gen-break-end">Fim da pausa</FieldLabel>
-                      <Input
-                        id="gen-break-end"
-                        type="time"
-                        value={genBreakEnd}
-                        onChange={(event) => setGenBreakEnd(event.target.value)}
-                        required
-                      />
-                    </Field>
-                  </div>
-                )}
-
-                <Field>
-                  <FieldLabel htmlFor="gen-slot">Duração de cada horário</FieldLabel>
-                  <select
-                    id="gen-slot"
-                    value={genSlotMinutes}
-                    onChange={(event) => setGenSlotMinutes(Number(event.target.value))}
-                    className="h-9 rounded-md border bg-transparent px-3 text-sm"
-                  >
-                    {[15, 30, 45, 60, 90].map((minutes) => (
-                      <option key={minutes} value={minutes}>
-                        {formatMinutes(minutes)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <p className="rounded-lg bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
-                  ≈{" "}
-                  <span className="font-semibold text-foreground">
-                    {estimateGeneratedSlots({
-                      startDate: genStart,
-                      endDate: genEnd,
-                      weekdays: genDays,
-                      workStart: genWorkStart,
-                      workEnd: genWorkEnd,
-                      slotMinutes: genSlotMinutes,
-                      ...(genBreak
-                        ? { breakStart: genBreakStart, breakEnd: genBreakEnd }
-                        : {}),
-                    })}
-                  </span>{" "}
-                  horários serão criados
-                </p>
-
-                {genError && <FieldError>{genError}</FieldError>}
-
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void closeGenerate()}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={genSubmitting || genDays.length === 0}>
-                    {genSubmitting ? (
-                      <>
-                        <Spinner data-icon="inline-start" />
-                        Gerando…
-                      </>
-                    ) : (
-                      "Gerar"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </FieldGroup>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+      {openEvent && (
+        <EventDetailsDialog
+          event={openEvent}
+          dateLabel={dayLabel}
+          onClose={() => setOpenEvent(null)}
+        />
+      )}
 
       <AlertDialog
-        open={deleting !== null}
+        open={deletingSlot !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleting(null);
+          if (!open) setDeletingSlot(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir horário</AlertDialogTitle>
             <AlertDialogDescription>
-              Excluir o horário de {deleting?.startTime} a {deleting?.endTime}?
+              Excluir o horário de {deletingSlot?.startTime} a {deletingSlot?.endTime}?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {deleteError && (
-            <p className="text-sm text-destructive">{deleteError}</p>
-          )}
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingSubmitting}>
-              Cancelar
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteSubmitting}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={deletingSubmitting}
+              disabled={deleteSubmitting}
               onClick={() => {
                 void handleDelete();
               }}
             >
-              {deletingSubmitting ? (
+              {deleteSubmitting ? (
                 <>
                   <Spinner data-icon="inline-start" />
                   Excluindo…
@@ -871,92 +340,6 @@ export default function SchedulePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <Dialog open={bookingSlot !== null} onOpenChange={(open) => !open && setBookingSlot(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reservar horário</DialogTitle>
-            <DialogDescription>
-              {bookingSlot &&
-                `${formatDate(bookingSlot.date.slice(0, 10))} · ${bookingSlot.startTime}`}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleBookingSubmit}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="booking-service">Serviço</FieldLabel>
-                <Select
-                  items={bookableServices.map((service) => ({
-                    value: String(service.id),
-                    label: service.name,
-                  }))}
-                  value={bookingServiceId}
-                  onValueChange={(value) => setBookingServiceId(value ?? "")}
-                >
-                  <SelectTrigger id="booking-service" className="w-full">
-                    <SelectValue placeholder="Escolha o serviço" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {bookableServices.map((service) => (
-                        <SelectItem key={service.id} value={String(service.id)}>
-                          {service.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="booking-name">Nome do cliente</FieldLabel>
-                <Input
-                  id="booking-name"
-                  value={bookingClientName}
-                  onChange={(event) => setBookingClientName(event.target.value)}
-                  maxLength={80}
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="booking-phone">Telefone</FieldLabel>
-                <Input
-                  id="booking-phone"
-                  value={bookingClientPhone}
-                  onChange={(event) => setBookingClientPhone(event.target.value)}
-                  maxLength={20}
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="booking-email">Email (opcional)</FieldLabel>
-                <Input
-                  id="booking-email"
-                  type="email"
-                  value={bookingClientEmail}
-                  onChange={(event) => setBookingClientEmail(event.target.value)}
-                  maxLength={120}
-                />
-              </Field>
-              {bookingError && <FieldError>{bookingError}</FieldError>}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setBookingSlot(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={bookingSubmitting || !bookingServiceId}>
-                  {bookingSubmitting ? (
-                    <>
-                      <Spinner data-icon="inline-start" />
-                      Reservando…
-                    </>
-                  ) : (
-                    "Reservar"
-                  )}
-                </Button>
-              </DialogFooter>
-            </FieldGroup>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

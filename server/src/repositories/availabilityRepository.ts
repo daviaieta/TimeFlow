@@ -1,54 +1,28 @@
 import { prisma } from "../lib/prisma";
 import { AvailabilityData } from "../services/availabilityRules";
 
-export type ScheduleDirection = "upcoming" | "past";
-
-// Não exportado: não é regra de negócio, é só "de que lado de hoje" vira
-// filtro do Prisma. countDates e findDatesPage compartilham a mesma escolha.
-function sideOfToday(direction: ScheduleDirection, todayStart: Date) {
-  return direction === "upcoming" ? { gte: todayStart } : { lt: todayStart };
-}
-
 // O booking é o que determina se o slot é imutável: quando existe, o slot não
 // pode ser editado ou removido. isBooked sozinho não é suficiente para esse check.
-const withBooking = { booking: { select: { id: true, clientName: true } } };
+// Os campos do cliente e do serviço vêm junto porque a timeline monta o evento
+// inteiro a partir do slot — sem eles seria uma segunda query por reserva.
+const withBooking = {
+  booking: {
+    select: {
+      id: true,
+      clientName: true,
+      clientPhone: true,
+      clientEmail: true,
+      service: { select: { id: true, name: true } },
+    },
+  },
+};
 
 export const availabilityRepository = {
-  countDates(employeeId: number, direction: ScheduleDirection, todayStart: Date) {
-    return prisma.availability
-      .groupBy({
-        by: ["date"],
-        where: { employeeId, date: sideOfToday(direction, todayStart) },
-      })
-      .then((rows) => rows.length);
-  },
-
-  findDatesPage(
-    employeeId: number,
-    direction: ScheduleDirection,
-    todayStart: Date,
-    skip: number,
-    take: number,
-  ) {
-    // findMany({ distinct }) faz o distinct/skip/take em memória sem a
-    // preview feature nativeDistinct — puxaria a tabela inteira desse lado
-    // de hoje pro processo Node. groupBy vira DISTINCT+LIMIT+OFFSET no SQL.
-    return prisma.availability.groupBy({
-      by: ["date"],
-      where: { employeeId, date: sideOfToday(direction, todayStart) },
-      orderBy: { date: direction === "upcoming" ? "asc" : "desc" },
-      skip,
-      take,
-    });
-  },
-
-  // Sempre crescente, nos dois modos: quem decide se os DIAS aparecem em
-  // ordem inversa (aba Passados) é o front, na exibição — os horários DENTRO
-  // de cada dia continuam crescentes nos dois casos.
-  findManyByEmployeeForDates(employeeId: number, dates: Date[]) {
+  // Um dia por vez, sempre crescente: é exatamente o que a timeline desenha.
+  findManyByEmployeeAndDate(employeeId: number, date: Date) {
     return prisma.availability.findMany({
-      where: { employeeId, date: { in: dates } },
-      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      where: { employeeId, date },
+      orderBy: { startTime: "asc" },
       include: withBooking,
     });
   },
