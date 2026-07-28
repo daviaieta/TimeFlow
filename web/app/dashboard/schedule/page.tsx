@@ -117,38 +117,45 @@ export default function SchedulePage() {
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
 
   const loadAvailabilities = useCallback(() => {
-    if (selectedEmployeeId === null) {
-      // Ainda não há colaborador selecionado (ex.: negócio sem nenhum
-      // colaborador, ou a busca de /employees falhou) — sem isso, o
-      // spinner inicial (loading = true) nunca seria desligado. O
-      // setState vai num .then() (não direto no corpo do effect) pra não
-      // disparar o lint de setState síncrono dentro de useEffect.
-      return Promise.resolve().then(() => setLoading(false));
-    }
+    // Todo o corpo roda num .then() (não direto no corpo do effect) pra não
+    // disparar o lint de setState síncrono dentro de useEffect — isso cobre
+    // tanto o setLoading(true) inicial (evita o "flash" da agenda do
+    // colaborador anterior ao trocar de seleção) quanto o branch abaixo.
+    return Promise.resolve().then(() => {
+      setLoading(true);
 
-    return fetchAdapter<{
-      availabilities: Availability[];
-      page: number;
-      totalPages: number;
-    }>({
-      method: "GET",
-      path: `/availabilities?employeeId=${selectedEmployeeId}&tab=${tab}&page=${page}`,
-    })
-      .then(({ data }) => {
-        setAvailabilities(data.availabilities);
-        // O servidor clampa a página fora do intervalo válido (ex.: excluiu o
-        // último horário da última página) — sincronizar em vez de confiar
-        // no que foi pedido evita a tela ficar presa numa página inexistente.
-        setPage(data.page);
-        setTotalPages(data.totalPages);
-        setListError(null);
-      })
-      .catch((err) => {
-        setListError(err instanceof ApiError ? err.message : "Erro inesperado.");
-      })
-      .finally(() => {
+      if (selectedEmployeeId === null) {
+        // Ainda não há colaborador selecionado (ex.: negócio sem nenhum
+        // colaborador, ou a busca de /employees falhou) — sem isso, o
+        // spinner inicial (loading = true) nunca seria desligado.
         setLoading(false);
-      });
+        return undefined;
+      }
+
+      return fetchAdapter<{
+        availabilities: Availability[];
+        page: number;
+        totalPages: number;
+      }>({
+        method: "GET",
+        path: `/availabilities?employeeId=${selectedEmployeeId}&tab=${tab}&page=${page}`,
+      })
+        .then(({ data }) => {
+          setAvailabilities(data.availabilities);
+          // O servidor clampa a página fora do intervalo válido (ex.: excluiu o
+          // último horário da última página) — sincronizar em vez de confiar
+          // no que foi pedido evita a tela ficar presa numa página inexistente.
+          setPage(data.page);
+          setTotalPages(data.totalPages);
+          setListError(null);
+        })
+        .catch((err) => {
+          setListError(err instanceof ApiError ? err.message : "Erro inesperado.");
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    });
   }, [selectedEmployeeId, tab, page]);
 
   useEffect(() => {
@@ -330,8 +337,15 @@ export default function SchedulePage() {
           </p>
         </div>
         <Select
+          items={employees.map((employee) => ({
+            value: String(employee.id),
+            label: employee.id === user.id ? "Eu" : employee.name,
+          }))}
           value={selectedEmployeeId ? String(selectedEmployeeId) : ""}
-          onValueChange={(value) => setSelectedEmployeeId(Number(value))}
+          onValueChange={(value) => {
+            setSelectedEmployeeId(Number(value));
+            setPage(1);
+          }}
         >
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Escolha um colaborador" />
@@ -470,13 +484,15 @@ export default function SchedulePage() {
                                 <Badge>Reservado</Badge>
                               ) : (
                                 <div className="flex shrink-0 gap-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openBooking(slot)}
-                                  >
-                                    Reservar
-                                  </Button>
+                                  {tab === "upcoming" && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openBooking(slot)}
+                                    >
+                                      Reservar
+                                    </Button>
+                                  )}
                                   {isOwnAgenda && (
                                     <>
                                       <Button
@@ -870,10 +886,14 @@ export default function SchedulePage() {
               <Field>
                 <FieldLabel htmlFor="booking-service">Serviço</FieldLabel>
                 <Select
+                  items={bookableServices.map((service) => ({
+                    value: String(service.id),
+                    label: service.name,
+                  }))}
                   value={bookingServiceId}
                   onValueChange={(value) => setBookingServiceId(value ?? "")}
                 >
-                  <SelectTrigger id="booking-service">
+                  <SelectTrigger id="booking-service" className="w-full">
                     <SelectValue placeholder="Escolha o serviço" />
                   </SelectTrigger>
                   <SelectContent>
