@@ -41,18 +41,3 @@ export function normalizeContact(input: ContactInput): NormalizedContact {
   };
 }
 
-export function withinWindow(
-  timestamps: number[],
-  now: number,
-  windowMs: number,
-): number[] {
-  return timestamps.filter((timestamp) => now - timestamp < windowMs);
-}
-
-export function isRateLimited(
-  timestamps: number[],
-  now: number,
-  options: { windowMs: number; max: number },
-): boolean {
-  return withinWindow(timestamps, now, options.windowMs).length >= options.max;
-}

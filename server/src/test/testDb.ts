@@ -56,27 +56,38 @@ async function schemaIsReady(): Promise<boolean> {
   return rows[0]?.found != null;
 }
 
-// Roda uma vez por processo — o node:test dá um processo por arquivo de
-// teste, e o script `pretest:integration` já deixa o schema pronto antes de
-// todos eles. O caminho de migração aqui existe para quem roda um arquivo
-// solto, sem passar pelo npm script.
+// Sempre aplica o que estiver pendente. É isto que o `pretest:integration`
+// chama, e precisa ser incondicional: checar só se as tabelas existem faria
+// uma migration NOVA nunca chegar ao schema de teste, e a suíte inteira
+// quebraria contra colunas que já existem em desenvolvimento.
+export async function applyMigrations(): Promise<void> {
+  assertTestSchema();
+
+  try {
+    execFileSync("npx", ["prisma", "migrate", "deploy"], {
+      env: { ...process.env, DATABASE_URL: testDatabaseUrl },
+      stdio: "pipe",
+    });
+  } catch (error) {
+    // Dois arquivos de teste rodando em paralelo podem chamar
+    // `migrate deploy` ao mesmo tempo e o segundo esbarra na criação do
+    // schema (P2002 em `nspname`). Se o schema ficou de pé, a corrida não
+    // machucou ninguém.
+    if (!(await schemaIsReady())) throw error;
+  }
+
+  migrated = true;
+}
+
+// Chamado no `before` de cada arquivo. O caso normal é não fazer nada: o
+// `pretest:integration` já migrou tudo num processo só. A migração aqui é
+// para quem roda um arquivo solto, sem passar pelo npm script.
 export async function ensureTestSchema(): Promise<void> {
   if (migrated) return;
   assertTestSchema();
 
   if (!(await schemaIsReady())) {
-    try {
-      execFileSync("npx", ["prisma", "migrate", "deploy"], {
-        env: { ...process.env, DATABASE_URL: testDatabaseUrl },
-        stdio: "pipe",
-      });
-    } catch (error) {
-      // Dois arquivos de teste rodando em paralelo podem chamar
-      // `migrate deploy` ao mesmo tempo e o segundo esbarra na criação do
-      // schema (P2002 em `nspname`). Se o schema ficou de pé, a corrida não
-      // machucou ninguém.
-      if (!(await schemaIsReady())) throw error;
-    }
+    await applyMigrations();
   }
 
   migrated = true;

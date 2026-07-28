@@ -25,6 +25,15 @@ export interface ChangePasswordBody {
   newPassword: string;
 }
 
+export interface ForgotPasswordBody {
+  email: string;
+}
+
+export interface ResetPasswordBody {
+  token: string;
+  password: string;
+}
+
 async function sendAuthToken(reply: FastifyReply, user: User): Promise<void> {
   const token = await reply.jwtSign({
     sub: user.id,
@@ -53,6 +62,31 @@ export async function acceptInvite(
   const { token, password } = request.body;
 
   const user = await authService.acceptInvite(token, password);
+
+  await sendAuthToken(reply, user);
+}
+
+export async function forgotPassword(
+  request: FastifyRequest<{ Body: ForgotPasswordBody }>,
+  reply: FastifyReply,
+): Promise<void> {
+  await authService.requestPasswordReset(request.body.email, request.ip, new Date());
+
+  // 204 sempre, inclusive para e-mail que não existe: a resposta não pode
+  // deixar descobrir quem tem conta. A tela diz "se este e-mail estiver
+  // cadastrado, enviamos o link".
+  reply.status(204).send();
+}
+
+export async function resetPassword(
+  request: FastifyRequest<{ Body: ResetPasswordBody }>,
+  reply: FastifyReply,
+): Promise<void> {
+  const { token, password } = request.body;
+
+  // Devolve token de sessão como o accept-invite: quem acabou de provar que
+  // controla o e-mail e definiu a senha não precisa digitá-la de novo.
+  const user = await authService.resetPassword(token, password, new Date());
 
   await sendAuthToken(reply, user);
 }

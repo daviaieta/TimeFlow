@@ -5,20 +5,12 @@ import {
   sendContactNotificationEmail,
 } from "../lib/emails/contact";
 import { NotFoundError, TooManyRequestsError } from "../lib/errors";
+import { createRateLimiter } from "../lib/rateLimit";
 import { contactRepository } from "../repositories/contactRepository";
 import { userRepository } from "../repositories/userRepository";
-import {
-  CONTACT_RATE_LIMIT,
-  ContactInput,
-  isBot,
-  isRateLimited,
-  normalizeContact,
-  withinWindow,
-} from "./contactRules";
+import { CONTACT_RATE_LIMIT, ContactInput, isBot, normalizeContact } from "./contactRules";
 
-// Em memória de propósito: para o volume atual não vale um Redis, e reiniciar
-// o processo zerar a janela é aceitável — o honeypot já segura o grosso.
-const hitsByIp = new Map<string, number[]>();
+const contactLimiter = createRateLimiter(CONTACT_RATE_LIMIT);
 
 async function resolveInbox(): Promise<string | null> {
   if (env.contactInbox) {
@@ -37,32 +29,11 @@ export const contactService = {
       return;
     }
 
-    const timestamp = now.getTime();
-    // Varre o mapa inteiro a cada chamada e remove IPs cuja janela zerou:
-    // sem isso, todo IP distinto que já bateu aqui uma vez fica preso no
-    // Map para sempre, e ele cresce sem limite pela vida do processo.
-    for (const [otherIp, timestamps] of hitsByIp) {
-      if (otherIp === ip) {
-        continue;
-      }
-      const pruned = withinWindow(timestamps, timestamp, CONTACT_RATE_LIMIT.windowMs);
-      if (pruned.length === 0) {
-        hitsByIp.delete(otherIp);
-      } else {
-        hitsByIp.set(otherIp, pruned);
-      }
-    }
-
-    const previous = hitsByIp.get(ip) ?? [];
-    if (isRateLimited(previous, timestamp, CONTACT_RATE_LIMIT)) {
+    if (contactLimiter.hit(ip, now.getTime())) {
       throw new TooManyRequestsError(
         "Muitas mensagens em pouco tempo. Tente novamente mais tarde.",
       );
     }
-    hitsByIp.set(ip, [
-      ...withinWindow(previous, timestamp, CONTACT_RATE_LIMIT.windowMs),
-      timestamp,
-    ]);
 
     const contact = normalizeContact(input);
 

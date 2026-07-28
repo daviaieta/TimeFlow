@@ -2,10 +2,14 @@ import { FastifyInstance } from "fastify";
 import {
   acceptInvite,
   changePassword,
+  forgotPassword,
   login,
   me,
+  resetPassword,
   updateMe,
   ChangePasswordBody,
+  ForgotPasswordBody,
+  ResetPasswordBody,
   UpdateMeBody,
 } from "../controllers/authController";
 import { authenticate } from "../middlewares/authenticate";
@@ -29,6 +33,31 @@ const acceptInviteSchema = {
     additionalProperties: false,
     properties: {
       token: { type: "string", minLength: 1 },
+      password: { type: "string", minLength: 8 },
+    },
+  },
+};
+
+const forgotPasswordSchema = {
+  body: {
+    type: "object",
+    required: ["email"],
+    additionalProperties: false,
+    properties: {
+      email: { type: "string", format: "email", maxLength: 120 },
+    },
+  },
+};
+
+const resetPasswordSchema = {
+  body: {
+    type: "object",
+    required: ["token", "password"],
+    additionalProperties: false,
+    properties: {
+      token: { type: "string", minLength: 1 },
+      // Mesmo mínimo do convite e da troca de senha: três caminhos definem
+      // senha, e a regra não pode divergir entre eles.
       password: { type: "string", minLength: 8 },
     },
   },
@@ -65,6 +94,18 @@ const changePasswordSchema = {
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/auth/login", { schema: loginSchema }, login);
   app.post("/auth/accept-invite", { schema: acceptInviteSchema }, acceptInvite);
+
+  app.post<{ Body: ForgotPasswordBody }>(
+    "/auth/forgot-password",
+    { schema: forgotPasswordSchema },
+    forgotPassword,
+  );
+
+  app.post<{ Body: ResetPasswordBody }>(
+    "/auth/reset-password",
+    { schema: resetPasswordSchema },
+    resetPassword,
+  );
   app.get("/auth/me", { preHandler: [authenticate] }, me);
 
   app.put<{ Body: UpdateMeBody }>(

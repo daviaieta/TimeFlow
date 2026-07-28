@@ -54,6 +54,32 @@ export const userRepository = {
     });
   },
 
+  findByPasswordResetTokenHash(passwordResetTokenHash: string) {
+    return prisma.user.findUnique({ where: { passwordResetTokenHash } });
+  },
+
+  startPasswordReset(id: number, tokenHash: string, expiresAt: Date) {
+    return prisma.user.update({
+      where: { id },
+      data: { passwordResetTokenHash: tokenHash, passwordResetExpiresAt: expiresAt },
+    });
+  },
+
+  // Zera o convite junto: um token de convite ainda válido seria um segundo
+  // caminho para definir a senha, por fora deste fluxo.
+  finishPasswordReset(id: number, hashedPassword: string) {
+    return prisma.user.update({
+      where: { id },
+      data: {
+        password: hashedPassword,
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        inviteToken: null,
+        inviteTokenExpiresAt: null,
+      },
+    });
+  },
+
   updateProfile(id: number, data: { name: string; email: string }) {
     return prisma.user.update({ where: { id }, data });
   },

@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  CONTACT_RATE_LIMIT,
-  isBot,
-  isRateLimited,
-  normalizeContact,
-  withinWindow,
-} from "./contactRules";
+import { CONTACT_RATE_LIMIT, isBot, normalizeContact } from "./contactRules";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -53,27 +47,6 @@ test("normalizeContact transforma opcional em branco em null", () => {
   assert.equal(result.phone, null);
   assert.equal(result.businessName, null);
   assert.equal(result.teamSize, null);
-});
-
-test("withinWindow descarta o que é mais velho que a janela", () => {
-  const now = 10 * HOUR;
-  const timestamps = [now - 2 * HOUR, now - 30 * 60 * 1000, now];
-
-  assert.deepEqual(withinWindow(timestamps, now, HOUR), [
-    now - 30 * 60 * 1000,
-    now,
-  ]);
-});
-
-test("isRateLimited só bloqueia ao atingir o máximo dentro da janela", () => {
-  const now = 10 * HOUR;
-  const options = { windowMs: HOUR, max: 3 };
-
-  assert.equal(isRateLimited([now, now], now, options), false);
-  assert.equal(isRateLimited([now, now, now], now, options), true);
-  // Três envios, mas velhos: a janela já passou, não bloqueia.
-  const old = now - 2 * HOUR;
-  assert.equal(isRateLimited([old, old, old], now, options), false);
 });
 
 test("o limite padrão é 3 por hora", () => {

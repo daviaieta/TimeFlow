@@ -74,6 +74,13 @@ model User {
   inviteToken           String?   @unique
   inviteTokenExpiresAt  DateTime?
 
+  // Guardado como hash SHA-256, ao contrário do inviteToken: o link de
+  // recuperação vale por si só para tomar a conta, então um vazamento de
+  // banco não pode entregar tokens utilizáveis. O que vai no e-mail é o
+  // valor cru, que não existe em lugar nenhum depois de enviado.
+  passwordResetTokenHash String?   @unique
+  passwordResetExpiresAt DateTime?
+
   business   Business? @relation(fields: [businessId], references: [id])
   businessId Int?
 
