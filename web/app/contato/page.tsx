@@ -55,7 +55,7 @@ const faq = [
 
 export default function ContatoPage() {
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50">
+    <div className="flex flex-1 flex-col">
       <LandingHeader />
 
       <section className="bg-gradient-to-b from-indigo-700 to-indigo-500 pb-20">
@@ -76,8 +76,8 @@ export default function ContatoPage() {
           <ContactForm />
 
           <div className="flex flex-col gap-6">
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-zinc-900">
+            <div className="rounded-2xl border bg-card p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-foreground">
                 O que acontece depois
               </h2>
               <ul className="mt-4 space-y-4">
@@ -88,10 +88,10 @@ export default function ContatoPage() {
                       className="mt-0.5 size-5 shrink-0 text-indigo-600"
                     />
                     <div>
-                      <p className="text-sm font-medium text-zinc-900">
+                      <p className="text-sm font-medium text-foreground">
                         {promise.title}
                       </p>
-                      <p className="mt-1 text-xs leading-5 text-zinc-600">
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
                         {promise.description}
                       </p>
                     </div>
@@ -100,17 +100,17 @@ export default function ContatoPage() {
               </ul>
             </div>
 
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-zinc-900">
+            <div className="rounded-2xl border bg-card p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-foreground">
                 Perguntas frequentes
               </h2>
               <dl className="mt-4 space-y-4">
                 {faq.map((item) => (
                   <div key={item.question}>
-                    <dt className="text-sm font-medium text-zinc-900">
+                    <dt className="text-sm font-medium text-foreground">
                       {item.question}
                     </dt>
-                    <dd className="mt-1 text-xs leading-5 text-zinc-600">
+                    <dd className="mt-1 text-xs leading-5 text-muted-foreground">
                       {item.answer}
                     </dd>
                   </div>

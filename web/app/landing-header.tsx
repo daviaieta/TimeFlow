@@ -58,17 +58,23 @@ export function LandingHeader() {
             scrolled ? "text-muted-foreground" : "text-white/85"
           }`}
         >
-          {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className={`transition-colors ${
-                scrolled ? "hover:text-foreground" : "hover:text-white"
-              }`}
-            >
-              {link.label}
-            </a>
-          ))}
+          {navLinks.map((link) => {
+            const className = `transition-colors ${
+              scrolled ? "hover:text-foreground" : "hover:text-white"
+            }`;
+
+            // Rotas (começam com "/") usam navegação client-side; âncoras
+            // (#hash) continuam como <a> para o scroll nativo na própria página.
+            return link.href.startsWith("/") ? (
+              <Link key={link.label} href={link.href} className={className}>
+                {link.label}
+              </Link>
+            ) : (
+              <a key={link.label} href={link.href} className={className}>
+                {link.label}
+              </a>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-3">

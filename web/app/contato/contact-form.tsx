@@ -84,15 +84,15 @@ export function ContactForm() {
 
   if (sent) {
     return (
-      <div className="flex flex-col items-center rounded-2xl border border-indigo-100 bg-white p-10 text-center shadow-sm">
+      <div className="flex flex-col items-center rounded-2xl border border-indigo-100 bg-card p-10 text-center shadow-sm">
         <HugeiconsIcon
           icon={CheckmarkCircle02Icon}
           className="size-10 text-indigo-600"
         />
-        <h2 className="mt-4 text-xl font-semibold text-zinc-900">
+        <h2 className="mt-4 text-xl font-semibold text-foreground">
           Mensagem enviada
         </h2>
-        <p className="mt-2 max-w-sm text-sm text-zinc-600">
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
           Respondo em até 1 dia útil, no e-mail que você informou. Enquanto isso,
           você já pode conferir os planos.
         </p>
@@ -103,7 +103,7 @@ export function ContactForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="relative rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-8"
+      className="relative rounded-2xl border bg-card p-6 shadow-sm sm:p-8"
       noValidate
     >
       <div className="grid gap-5 sm:grid-cols-2">
@@ -114,10 +114,13 @@ export function ContactForm() {
             value={values.name}
             onChange={(event) => update("name", event.target.value)}
             aria-invalid={Boolean(errors.name)}
+            aria-describedby={errors.name ? "name-error" : undefined}
             className="mt-1"
           />
           {errors.name && (
-            <p className="mt-1 text-xs text-red-600">{errors.name}</p>
+            <p id="name-error" className="mt-1 text-xs text-destructive">
+              {errors.name}
+            </p>
           )}
         </div>
 
@@ -129,10 +132,13 @@ export function ContactForm() {
             value={values.email}
             onChange={(event) => update("email", event.target.value)}
             aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? "email-error" : undefined}
             className="mt-1"
           />
           {errors.email && (
-            <p className="mt-1 text-xs text-red-600">{errors.email}</p>
+            <p id="email-error" className="mt-1 text-xs text-destructive">
+              {errors.email}
+            </p>
           )}
         </div>
 
@@ -142,8 +148,15 @@ export function ContactForm() {
             id="phone"
             value={values.phone}
             onChange={(event) => update("phone", event.target.value)}
+            aria-invalid={Boolean(errors.phone)}
+            aria-describedby={errors.phone ? "phone-error" : undefined}
             className="mt-1"
           />
+          {errors.phone && (
+            <p id="phone-error" className="mt-1 text-xs text-destructive">
+              {errors.phone}
+            </p>
+          )}
         </div>
 
         <div>
@@ -152,8 +165,17 @@ export function ContactForm() {
             id="businessName"
             value={values.businessName}
             onChange={(event) => update("businessName", event.target.value)}
+            aria-invalid={Boolean(errors.businessName)}
+            aria-describedby={
+              errors.businessName ? "businessName-error" : undefined
+            }
             className="mt-1"
           />
+          {errors.businessName && (
+            <p id="businessName-error" className="mt-1 text-xs text-destructive">
+              {errors.businessName}
+            </p>
+          )}
         </div>
 
         <div>
@@ -162,7 +184,7 @@ export function ContactForm() {
             id="teamSize"
             value={values.teamSize}
             onChange={(event) => update("teamSize", event.target.value)}
-            className="mt-1 h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm"
+            className="mt-1 h-9 w-full min-w-0 rounded-4xl border border-input bg-input/30 px-3 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
           >
             <option value="">Prefiro não dizer</option>
             {TEAM_SIZE_OPTIONS.map((option) => (
@@ -181,11 +203,14 @@ export function ContactForm() {
             value={values.message}
             onChange={(event) => update("message", event.target.value)}
             aria-invalid={Boolean(errors.message)}
+            aria-describedby={errors.message ? "message-error" : undefined}
             placeholder="Conte como sua agenda funciona hoje e o que te trouxe aqui."
             className="mt-1"
           />
           {errors.message && (
-            <p className="mt-1 text-xs text-red-600">{errors.message}</p>
+            <p id="message-error" className="mt-1 text-xs text-destructive">
+              {errors.message}
+            </p>
           )}
         </div>
       </div>
@@ -203,7 +228,7 @@ export function ContactForm() {
       </div>
 
       {submitError && (
-        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {submitError}
         </p>
       )}
@@ -211,7 +236,7 @@ export function ContactForm() {
       <Button type="submit" disabled={sending} className="mt-6 w-full sm:w-auto">
         {sending ? "Enviando..." : "Enviar mensagem"}
       </Button>
-      <p className="mt-3 text-xs text-zinc-500">
+      <p className="mt-3 text-xs text-muted-foreground">
         Sem robô e sem fila: quem responde é quem construiu o Time Flow.
       </p>
     </form>
