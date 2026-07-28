@@ -129,16 +129,14 @@ export default function Home() {
                 <span className="size-3 rounded-full bg-green-400" />
               </div>
               <div className="mx-auto flex h-7 w-full max-w-sm items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-500">
-                timeflow.app/barbearia-old-brothers
+                timeflow/business
               </div>
               <div className="w-12" />
             </div>
 
             <div className="flex">
               <aside className="hidden w-56 shrink-0 border-r border-zinc-100 p-5 sm:block">
-                <p className="text-sm font-semibold text-zinc-900">
-                  Barbearia Old Brothers
-                </p>
+                <p className="text-sm font-semibold text-zinc-900">Business</p>
                 <p className="mt-1 text-xs text-zinc-500">
                   Seg – Sáb · 9h às 19h
                 </p>
