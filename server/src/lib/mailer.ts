@@ -1,56 +1,58 @@
-import nodemailer, { Transporter } from "nodemailer";
+import { Resend } from "resend";
+import { env } from "../config/env";
 
-let transporter: Transporter | null = null;
-
-async function getTransporter(): Promise<Transporter> {
-  if (transporter) {
-    return transporter;
-  }
-
-  if (process.env.SMTP_HOST) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT ?? 587),
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-    return transporter;
-  }
-
-  // Sem SMTP configurado: usa uma conta de teste Ethereal (dev only).
-  // O e-mail não é entregue de verdade — o link de preview sai no console.
-  const testAccount = await nodemailer.createTestAccount();
-  transporter = nodemailer.createTransport({
-    host: testAccount.smtp.host,
-    port: testAccount.smtp.port,
-    secure: testAccount.smtp.secure,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
-
-  return transporter;
-}
-
-interface SendMailInput {
+export interface SendMailInput {
   to: string;
   subject: string;
   html: string;
+  // Notificação de contato usa isto para "Responder" cair direto no lead.
+  replyTo?: string;
 }
 
-export async function sendMail(input: SendMailInput): Promise<void> {
-  const mailer = await getTransporter();
-
-  const info = await mailer.sendMail({
-    from: process.env.MAIL_FROM ?? '"Time Flow" <no-reply@timeflow.com>',
-    ...input,
-  });
-
-  const previewUrl = nodemailer.getTestMessageUrl(info);
-  if (previewUrl) {
-    console.log(`Email preview (Ethereal): ${previewUrl}`);
-  }
+interface MailerConfig {
+  apiKey: string | null;
+  from: string;
+  logger?: Pick<Console, "log" | "error">;
 }
+
+// Fábrica em vez de função solta: é o que permite testar o modo console sem
+// credencial e sem tocar em process.env dentro do teste.
+export function createMailer(config: MailerConfig) {
+  const logger = config.logger ?? console;
+  const client = config.apiKey ? new Resend(config.apiKey) : null;
+
+  return async function send(input: SendMailInput): Promise<void> {
+    if (!client) {
+      // Modo desenvolvimento: nada sai da máquina. O corpo inteiro polui o
+      // terminal, então só o cabeçalho e os links vão para o log.
+      logger.log(`[mailer] modo console — para: ${input.to} | assunto: ${input.subject}`);
+      for (const link of extractLinks(input.html)) {
+        logger.log(`[mailer] link: ${link}`);
+      }
+      return;
+    }
+
+    const { error } = await client.emails.send({
+      from: config.from,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+    });
+
+    // O SDK devolve o erro no retorno em vez de lançar: sem esta checagem, um
+    // envio recusado passaria por bem-sucedido.
+    if (error) {
+      throw new Error(`Resend recusou o envio: ${error.message}`);
+    }
+  };
+}
+
+function extractLinks(html: string): string[] {
+  return [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
+}
+
+export const sendMail = createMailer({
+  apiKey: env.resendApiKey,
+  from: env.mailFrom,
+});
