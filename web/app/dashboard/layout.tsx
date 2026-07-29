@@ -13,6 +13,7 @@ import {
   Settings02Icon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
+import { BusinessMark } from "@/components/business-mark";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -182,6 +183,12 @@ export default function DashboardLayout({
           <header className="flex h-16 items-center justify-between gap-3 border-b bg-card px-4 sm:px-6">
             {user.business ? (
               <div className="flex min-w-0 items-center gap-3">
+                <BusinessMark
+                  name={user.business.name}
+                  slug={user.business.slug}
+                  src={user.business.logoUrl}
+                  className="size-9 rounded-xl"
+                />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold tracking-tight">
                     {formatBusinessName(user.business.name)}

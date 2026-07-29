@@ -37,7 +37,7 @@ function Occupancy({ row }: { row: TeamRow }) {
 function Name({ row }: { row: TeamRow }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <TeamAvatar name={row.name} className="size-9 rounded-xl text-xs" />
+      <TeamAvatar name={row.name} src={row.avatarUrl} className="size-9 rounded-xl text-xs" />
       <div className="min-w-0">
         <p className="truncate font-medium">{row.name}</p>
         {row.pendingInvite ? (

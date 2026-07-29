@@ -25,6 +25,7 @@ export interface TeamRow {
   id: number;
   name: string;
   pendingInvite: boolean;
+  avatarUrl: string | null;
   slots: number;
   booked: number;
   rate: number;
