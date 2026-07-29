@@ -191,7 +191,9 @@ tela ganha estado vazio novo.
 | --- | --- |
 | Arquivo não é imagem aceita | 400 `ValidationError` |
 | Arquivo acima de 2 MB | 400 `ValidationError` |
-| Alvo de outro negócio, ou EMPLOYEE mexendo em avatar alheio | 403 `ForbiddenError` |
+| Negócio de outro dono | 403 `ForbiddenError` — é o que `updateBusiness` já faz hoje |
+| EMPLOYEE mexendo em avatar alheio do mesmo negócio | 403 `ForbiddenError` |
+| Colaborador de outro negócio | 404 `NotFoundError` — 403 confirmaria que aquele id existe |
 | Negócio ou colaborador inexistente | 404 `NotFoundError` |
 | Falha ao gravar no bucket | 500, imagem não trocada no banco |
 
