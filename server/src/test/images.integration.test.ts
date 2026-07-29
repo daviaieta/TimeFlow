@@ -214,6 +214,29 @@ test("ADMIN de outro negócio recebe 404 no avatar alheio", async () => {
   assert.equal(untouched.avatarKey, null);
 });
 
+// Mesma lógica do teste do ADMIN acima, mas para EMPLOYEE: sem essa checagem
+// de negócio no service, o 403 de "não pode editar" vazaria que aquele id de
+// outro negócio existe — por isso a resposta tem que ser 404, igual à do
+// ADMIN.
+test("EMPLOYEE de outro negócio recebe 404 no avatar alheio", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const beta = await seedBookableBusiness("beta");
+  const { payload, headers } = multipart(pngBytes());
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/employees/${beta.employee.id}/avatar`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.employee)}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 404);
+  const untouched = await testPrisma.user.findUniqueOrThrow({
+    where: { id: beta.employee.id },
+  });
+  assert.equal(untouched.avatarKey, null);
+});
+
 // seedBookableBusiness só cria um EMPLOYEE por negócio, então o alvo "outra
 // pessoa do mesmo negócio" aqui é o ADMIN — ele existe, só não pode ser
 // editado por um EMPLOYEE, daí o 403 (e não 404).

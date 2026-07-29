@@ -31,11 +31,15 @@ async function findOwnedEmployee(businessId: number, id: number): Promise<User> 
 }
 
 // A ordem importa. Fora do seu negócio, o alvo simplesmente "não existe" —
-// 403 aqui contaria que aquele id é de alguém. Dentro do negócio, o 403 é
+// 403 aqui contaria que aquele id é de alguém, e isso vale para QUALQUER
+// papel (ADMIN ou EMPLOYEE), não só ADMIN: um EMPLOYEE do negócio A mirando
+// um id do negócio B não pode diferenciar "existe mas não é meu" de "não
+// existe". `actor.businessId === null` é o caso do SUPERADMIN — sem negócio,
+// "mesmo negócio" nunca pode bater por acidente. Dentro do negócio, o 403 é
 // informação legítima: você sabe que a pessoa existe, só não pode editá-la.
 async function findAvatarTarget(actor: AvatarActor, employeeId: number): Promise<User> {
   const target = await employeeRepository.findById(employeeId);
-  if (!target || (actor.role === Role.ADMIN && target.businessId !== actor.businessId)) {
+  if (!target || actor.businessId === null || target.businessId !== actor.businessId) {
     throw new NotFoundError("Employee not found");
   }
 
