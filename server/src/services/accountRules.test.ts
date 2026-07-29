@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canEditBusiness, normalizeEmail, requiresCurrentPassword } from "./accountRules";
+import { Role } from "@prisma/client";
+import {
+  canEditBusiness,
+  canEditEmployeeAvatar,
+  normalizeEmail,
+  requiresCurrentPassword,
+} from "./accountRules";
 
 test("normalizeEmail apara espaços e baixa a caixa", () => {
   assert.equal(normalizeEmail("  Jose@X.com "), "jose@x.com");
@@ -43,4 +49,42 @@ test("admin NÃO pode editar o negócio de outro", () => {
 
 test("usuário sem negócio (SUPERADMIN) não pode editar nenhum", () => {
   assert.equal(canEditBusiness(1, null), false);
+});
+
+test("ADMIN edita avatar de quem é do mesmo negócio", () => {
+  assert.equal(
+    canEditEmployeeAvatar(
+      { id: 1, role: Role.ADMIN, businessId: 10 },
+      { id: 2, businessId: 10 },
+    ),
+    true,
+  );
+});
+
+test("ADMIN não edita avatar de outro negócio", () => {
+  assert.equal(
+    canEditEmployeeAvatar(
+      { id: 1, role: Role.ADMIN, businessId: 10 },
+      { id: 2, businessId: 20 },
+    ),
+    false,
+  );
+});
+
+test("EMPLOYEE edita só o próprio avatar", () => {
+  const actor = { id: 5, role: Role.EMPLOYEE, businessId: 10 };
+  assert.equal(canEditEmployeeAvatar(actor, { id: 5, businessId: 10 }), true);
+  assert.equal(canEditEmployeeAvatar(actor, { id: 6, businessId: 10 }), false);
+});
+
+// SUPERADMIN não pertence a negócio nenhum: sem businessId, "mesmo negócio"
+// não existe e a permissão não pode ser concedida por engano.
+test("SUPERADMIN não edita avatar de colaborador", () => {
+  assert.equal(
+    canEditEmployeeAvatar(
+      { id: 1, role: Role.SUPERADMIN, businessId: null },
+      { id: 2, businessId: 10 },
+    ),
+    false,
+  );
 });

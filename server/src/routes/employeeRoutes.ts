@@ -3,9 +3,11 @@ import { FastifyInstance } from "fastify";
 import {
   createEmployee,
   deleteEmployee,
+  deleteEmployeeAvatar,
   linkService,
   listEmployees,
   unlinkService,
+  uploadEmployeeAvatar,
   CreateEmployeeBody,
   EmployeeParams,
   LinkServiceBody,
@@ -102,5 +104,25 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     unlinkService,
+  );
+
+  // Sem requireActiveSubscription: trocar a própria foto não movimenta a
+  // agenda nem cria dado novo — bloquear isso por assinatura só irrita.
+  app.post<{ Params: EmployeeParams }>(
+    "/employees/:id/avatar",
+    {
+      schema: employeeParamsSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN, Role.EMPLOYEE)],
+    },
+    uploadEmployeeAvatar,
+  );
+
+  app.delete<{ Params: EmployeeParams }>(
+    "/employees/:id/avatar",
+    {
+      schema: employeeParamsSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN, Role.EMPLOYEE)],
+    },
+    deleteEmployeeAvatar,
   );
 }

@@ -1,3 +1,5 @@
+import { Role } from "@prisma/client";
+
 // Espaço e caixa não distinguem endereços de e-mail na prática, mas o @unique
 // do Postgres compara byte a byte. Normalizar antes de comparar e de gravar
 // impede que esta tela crie duas contas que o usuário leria como a mesma.
@@ -25,4 +27,22 @@ export function canEditBusiness(
   userBusinessId: number | null,
 ): boolean {
   return userBusinessId !== null && targetBusinessId === userBusinessId;
+}
+
+// Duas permissões diferentes no mesmo lugar: o dono cuida da vitrine inteira,
+// o colaborador cuida da própria cara. `authorize()` não dá conta porque só
+// olha papel, e aqui a identidade do alvo importa.
+export function canEditEmployeeAvatar(
+  actor: { id: number; role: Role; businessId: number | null },
+  target: { id: number; businessId: number | null },
+): boolean {
+  if (actor.role === Role.ADMIN) {
+    return actor.businessId !== null && actor.businessId === target.businessId;
+  }
+
+  if (actor.role === Role.EMPLOYEE) {
+    return actor.id === target.id;
+  }
+
+  return false;
 }

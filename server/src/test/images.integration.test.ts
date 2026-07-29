@@ -157,6 +157,108 @@ test("DELETE limpa a key da logo", async () => {
   assert.equal(saved.logoKey, null);
 });
 
+test("EMPLOYEE sobe o próprio avatar", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const { payload, headers } = multipart(pngBytes());
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/employees/${alfa.employee.id}/avatar`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.employee)}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(
+    response.json().employee.avatarUrl,
+    /\/uploads\/employees\/\d+\/avatar-[0-9a-f]+\.png$/,
+  );
+
+  const saved = await testPrisma.user.findUniqueOrThrow({
+    where: { id: alfa.employee.id },
+  });
+  assert.match(saved.avatarKey ?? "", /^employees\/\d+\/avatar-[0-9a-f]+\.png$/);
+});
+
+test("ADMIN sobe o avatar de um colaborador do próprio negócio", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const { payload, headers } = multipart(pngBytes());
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/employees/${alfa.employee.id}/avatar`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.admin)}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 200);
+});
+
+// 404 e não 403: um 403 confirmaria que aquele id existe em algum lugar.
+test("ADMIN de outro negócio recebe 404 no avatar alheio", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const beta = await seedBookableBusiness("beta");
+  const { payload, headers } = multipart(pngBytes());
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/employees/${beta.employee.id}/avatar`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.admin)}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 404);
+  const untouched = await testPrisma.user.findUniqueOrThrow({
+    where: { id: beta.employee.id },
+  });
+  assert.equal(untouched.avatarKey, null);
+});
+
+// seedBookableBusiness só cria um EMPLOYEE por negócio, então o alvo "outra
+// pessoa do mesmo negócio" aqui é o ADMIN — ele existe, só não pode ser
+// editado por um EMPLOYEE, daí o 403 (e não 404).
+test("EMPLOYEE não mexe no avatar de outra pessoa do mesmo negócio", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const { payload, headers } = multipart(pngBytes());
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/employees/${alfa.admin.id}/avatar`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.employee)}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 403);
+  const untouched = await testPrisma.user.findUniqueOrThrow({
+    where: { id: alfa.admin.id },
+  });
+  assert.equal(untouched.avatarKey, null);
+});
+
+test("DELETE limpa a key do avatar", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const { payload, headers } = multipart(pngBytes());
+  await app.inject({
+    method: "POST",
+    url: `/employees/${alfa.employee.id}/avatar`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.employee)}` },
+    payload,
+  });
+
+  const response = await app.inject({
+    method: "DELETE",
+    url: `/employees/${alfa.employee.id}/avatar`,
+    headers: { authorization: `Bearer ${tokenFor(alfa.employee)}` },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().employee.avatarUrl, null);
+  const saved = await testPrisma.user.findUniqueOrThrow({
+    where: { id: alfa.employee.id },
+  });
+  assert.equal(saved.avatarKey, null);
+});
+
 test("upload maior que 2 MB responde 4xx em português e não grava nada", async () => {
   const alfa = await seedBookableBusiness("alfa");
   const oversizedBytes = Buffer.concat([

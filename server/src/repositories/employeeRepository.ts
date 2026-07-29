@@ -30,6 +30,10 @@ export const employeeRepository = {
     return prisma.user.findUnique({ where: { id } });
   },
 
+  setAvatarKey(id: number, key: string | null) {
+    return prisma.user.update({ where: { id }, data: { avatarKey: key } });
+  },
+
   create(data: CreateEmployeeInput) {
     return prisma.user.create({ data: { ...data, role: Role.EMPLOYEE } });
   },

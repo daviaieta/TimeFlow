@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from "fastify";
+import { BadRequestError } from "../lib/errors";
 import { requireBusinessId } from "../lib/requireBusinessId";
 import { employeeService } from "../services/employeeService";
 
@@ -63,4 +64,50 @@ export async function unlinkService(
     request.params.serviceId,
   );
   reply.status(204).send();
+}
+
+async function readUploadedImage(request: FastifyRequest): Promise<Buffer> {
+  const file = await request.file();
+  if (!file) {
+    throw new BadRequestError('Envie a imagem no campo "file".');
+  }
+
+  try {
+    // O plugin corta o stream em MAX_IMAGE_BYTES e toBuffer lança antes de
+    // devolver qualquer conteúdo — nunca chega a existir um Buffer maior
+    // que o limite para checar depois.
+    return await file.toBuffer();
+  } catch (error) {
+    if ((error as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") {
+      throw new BadRequestError("A imagem precisa ter no máximo 2 MB.");
+    }
+
+    throw error;
+  }
+}
+
+export async function uploadEmployeeAvatar(
+  request: FastifyRequest<{ Params: EmployeeParams }>,
+  reply: FastifyReply,
+): Promise<void> {
+  const bytes = await readUploadedImage(request);
+  const employee = await employeeService.updateAvatar(
+    { id: request.user.sub, role: request.user.role, businessId: request.user.businessId },
+    request.params.id,
+    bytes,
+  );
+
+  reply.send({ employee });
+}
+
+export async function deleteEmployeeAvatar(
+  request: FastifyRequest<{ Params: EmployeeParams }>,
+  reply: FastifyReply,
+): Promise<void> {
+  const employee = await employeeService.removeAvatar(
+    { id: request.user.sub, role: request.user.role, businessId: request.user.businessId },
+    request.params.id,
+  );
+
+  reply.send({ employee });
 }
