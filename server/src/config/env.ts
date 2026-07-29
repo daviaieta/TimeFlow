@@ -1,4 +1,6 @@
 import "dotenv/config";
+import path from "node:path";
+import { resolveStorageConfig } from "../lib/storage/storageConfig";
 import { parseOrigins } from "./origins";
 
 function required(name: string): string {
@@ -46,4 +48,14 @@ export const env = {
   // Destino das notificações de contato. Sem valor, o serviço cai no e-mail
   // do SUPERADMIN cadastrado no banco.
   contactInbox: process.env.CONTACT_INBOX ?? null,
+  // Resolvido no boot de propósito: configuração do R2 pela metade derruba o
+  // servidor agora, em vez de silenciosamente gravar no disco efêmero e só
+  // dar sinal quando as fotos sumirem.
+  storage: resolveStorageConfig(process.env, {
+    rootDir: process.env.UPLOADS_DIR ?? path.resolve(process.cwd(), "uploads"),
+    baseUrl: (process.env.PUBLIC_API_URL ?? `http://localhost:${process.env.PORT ?? 3333}`).replace(
+      /\/+$/,
+      "",
+    ),
+  }),
 };

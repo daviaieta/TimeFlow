@@ -34,6 +34,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1097.0",
     "@fastify/cors": "^11.3.0",
     "@fastify/jwt": "^10.2.0",
     "@prisma/client": "^6.1.0",
