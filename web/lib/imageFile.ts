@@ -3,7 +3,14 @@ import { ImagePreset, coverCrop } from "./image.ts";
 // Sem teste em Node: canvas e createImageBitmap só existem no browser. A
 // parte que tem regra — o recorte — mora em image.ts, que é testada.
 export async function resizeToWebp(file: File, preset: ImagePreset): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    // O DOMException nativo do browser vem em inglês (ex.: "The source image
+    // could not be decoded") e escaparia cru pra tela via translateError.
+    throw new Error("Não foi possível ler esta imagem. Ela pode estar corrompida.");
+  }
 
   try {
     const canvas = document.createElement("canvas");
