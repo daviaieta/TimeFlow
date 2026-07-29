@@ -47,6 +47,11 @@ model Business {
   // Nullable de propósito: todo negócio já cadastrado nasce sem endereço, e
   // nem todo negócio tem ponto físico.
   address   String?
+  // Key do objeto no bucket, não URL. A URL pública é montada na camada de
+  // service a partir de R2_PUBLIC_URL — trocar de bucket ou de domínio vira
+  // uma variável de ambiente em vez de um UPDATE em todas as linhas.
+  logoKey   String?
+  bannerKey String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -70,6 +75,9 @@ model User {
   role      Role
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Mesma razão do logoKey do Business: guarda a key, não a URL.
+  avatarKey String?
 
   inviteToken           String?   @unique
   inviteTokenExpiresAt  DateTime?
