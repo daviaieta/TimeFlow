@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
 // ATENÇÃO À ORDEM DE IMPORT: todo arquivo de teste de integração precisa
@@ -28,6 +30,11 @@ function buildTestDatabaseUrl(): string {
 
 export const testDatabaseUrl = buildTestDatabaseUrl();
 process.env.DATABASE_URL = testDatabaseUrl;
+
+// Mesma razão da ordem de import acima: `config/env` resolve a configuração
+// de storage na avaliação do módulo. Sem isto, o teste escreveria em
+// `server/uploads/` e sujaria a pasta de desenvolvimento.
+process.env.UPLOADS_DIR ??= path.join(tmpdir(), "timeflow-test-uploads");
 
 // Trava de segurança: `resetDatabase` é um TRUNCATE disfarçado. Se a URL
 // apontar para qualquer schema que não seja o de teste, é porque a ordem de

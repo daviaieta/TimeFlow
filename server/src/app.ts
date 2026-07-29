@@ -1,6 +1,8 @@
 import "dotenv/config";
 import fastifyCors from "@fastify/cors";
 import fastifyJwt from "@fastify/jwt";
+import fastifyMultipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { fastify, FastifyInstance } from "fastify";
 import { corsOptions } from "./config/cors";
 import { env } from "./config/env";
@@ -16,6 +18,7 @@ import { employeeRoutes } from "./routes/employeeRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
 import { publicRoutes } from "./routes/publicRoutes";
 import { serviceRoutes } from "./routes/serviceRoutes";
+import { MAX_IMAGE_BYTES } from "./services/imageRules";
 import "./interfaces/auth";
 
 // Monta a aplicação sem subir o processo. Separar as duas coisas é o que
@@ -41,6 +44,24 @@ export function buildApp(): FastifyInstance {
 
   app.register(fastifyCors, corsOptions);
   app.register(fastifyJwt, { secret: env.jwtSecret });
+
+  app.register(fastifyMultipart, {
+    // O plugin corta o stream no limite: um arquivo gigante nunca chega a
+    // virar Buffer na memória do processo.
+    limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+  });
+
+  // Só no modo disco. Em produção quem serve as imagens é o R2, e expor uma
+  // pasta que nem existe seria só superfície a mais.
+  if (env.storage.mode === "disk") {
+    app.register(fastifyStatic, {
+      root: env.storage.rootDir,
+      prefix: "/uploads/",
+      // A pasta pode não existir ainda no primeiro boot.
+      wildcard: false,
+    });
+  }
+
   app.setErrorHandler(errorHandler);
 
   app.get("/", async () => {

@@ -6,6 +6,7 @@ import { sendEmployeeInviteEmail, sendInviteEmail } from "../lib/emails/invite";
 import { businessRepository } from "../repositories/businessRepository";
 import { userRepository } from "../repositories/userRepository";
 import { canEditBusiness } from "./accountRules";
+import { imageService } from "./imageService";
 import {
   PlatformOverview,
   buildBusinessRows,
@@ -28,6 +29,14 @@ interface CreateBusinessResult {
     id: number;
     name: string;
     email: string;
+  };
+}
+
+function toBusinessImages(business: Business) {
+  return {
+    id: business.id,
+    logoUrl: imageService.imageUrl(business.logoKey),
+    bannerUrl: imageService.imageUrl(business.bannerKey),
   };
 }
 
@@ -169,5 +178,52 @@ export const businessService = {
     }
 
     return businessRepository.update(businessId, { ...input, name: input.name.trim() });
+  },
+
+  async updateBusinessImage(
+    businessId: number,
+    userBusinessId: number | null,
+    slot: "logo" | "banner",
+    bytes: Buffer,
+  ) {
+    if (!canEditBusiness(businessId, userBusinessId)) {
+      throw new ForbiddenError("You do not have permission to edit this business");
+    }
+
+    const business = await businessRepository.findById(businessId);
+    if (!business) {
+      throw new NotFoundError("Business not found");
+    }
+
+    // Grava no storage ANTES do banco: na ordem inversa, uma falha no upload
+    // deixaria a linha apontando para um objeto que não existe.
+    const key = await imageService.storeImage({ slot, ownerId: businessId, bytes });
+    const previousKey = slot === "logo" ? business.logoKey : business.bannerKey;
+
+    const updated = await businessRepository.setImageKey(businessId, slot, key);
+    await imageService.discardImage(previousKey);
+
+    return toBusinessImages(updated);
+  },
+
+  async removeBusinessImage(
+    businessId: number,
+    userBusinessId: number | null,
+    slot: "logo" | "banner",
+  ) {
+    if (!canEditBusiness(businessId, userBusinessId)) {
+      throw new ForbiddenError("You do not have permission to edit this business");
+    }
+
+    const business = await businessRepository.findById(businessId);
+    if (!business) {
+      throw new NotFoundError("Business not found");
+    }
+
+    const previousKey = slot === "logo" ? business.logoKey : business.bannerKey;
+    const updated = await businessRepository.setImageKey(businessId, slot, null);
+    await imageService.discardImage(previousKey);
+
+    return toBusinessImages(updated);
   },
 };

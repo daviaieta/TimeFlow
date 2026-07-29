@@ -59,6 +59,15 @@ export const businessRepository = {
     });
   },
 
+  // Campo escolhido por um union fechado, não por chave dinâmica: é o que
+  // impede a rota de escrever numa coluna que não seja de imagem.
+  setImageKey(id: number, slot: "logo" | "banner", key: string | null) {
+    return prisma.business.update({
+      where: { id },
+      data: slot === "logo" ? { logoKey: key } : { bannerKey: key },
+    });
+  },
+
   // Só planName e customer: o stripeSubscriptionId só existe DEPOIS que o
   // pagamento é confirmado, e vem por setStripeSubscriptionId.
   updateBilling(id: number, data: { planName: PlanName; stripeCustomerId: string }) {
