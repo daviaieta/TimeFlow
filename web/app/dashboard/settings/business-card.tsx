@@ -99,6 +99,7 @@ export function BusinessCard({
           preset={IMAGE_PRESETS.logo}
           currentUrl={logoUrl}
           uploadPath={`/businesses/${business.id}/logo`}
+          responseField={{ entity: "business", field: "logoUrl" }}
           onDone={async (url) => {
             setLogoUrl(url);
             await refresh();
@@ -112,6 +113,7 @@ export function BusinessCard({
           shape="wide"
           currentUrl={bannerUrl}
           uploadPath={`/businesses/${business.id}/banner`}
+          responseField={{ entity: "business", field: "bannerUrl" }}
           onDone={async (url) => {
             setBannerUrl(url);
             await refresh();

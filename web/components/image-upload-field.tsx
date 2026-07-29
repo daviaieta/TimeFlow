@@ -7,6 +7,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Spinner } from "@/components/ui/spinner";
 import { ImagePreset } from "@/lib/image";
 import { resizeToWebp } from "@/lib/imageFile";
+import { extractResponseUrl, ImageResponseField } from "@/lib/imageResponseField";
 import { cn } from "@/lib/utils";
 
 interface ImageUploadFieldProps {
@@ -16,6 +17,8 @@ interface ImageUploadFieldProps {
   currentUrl: string | null;
   /** Caminho na API. POST envia, DELETE remove. */
   uploadPath: string;
+  /** De onde vem a URL na resposta do upload — ver imageResponseField.ts. */
+  responseField: ImageResponseField;
   onDone: (url: string | null) => void | Promise<void>;
   shape?: "square" | "wide";
 }
@@ -38,6 +41,7 @@ export function ImageUploadField({
   preset,
   currentUrl,
   uploadPath,
+  responseField,
   onDone,
   shape = "square",
 }: ImageUploadFieldProps) {
@@ -56,12 +60,9 @@ export function ImageUploadField({
     setBusy(true);
     try {
       const blob = await resizeToWebp(file, preset);
-      const data = await uploadAdapter<{
-        business?: { logoUrl: string | null; bannerUrl: string | null };
-        employee?: { avatarUrl: string | null };
-      }>({ path: uploadPath, file: blob });
+      const data = await uploadAdapter({ path: uploadPath, file: blob });
 
-      await onDone(extractUrl(data, uploadPath));
+      await onDone(extractResponseUrl(data, responseField));
     } catch (err) {
       setError(translateError(err));
     } finally {
@@ -140,17 +141,4 @@ export function ImageUploadField({
       {error ? <FieldError>{error}</FieldError> : null}
     </Field>
   );
-}
-
-function extractUrl(
-  data: {
-    business?: { logoUrl: string | null; bannerUrl: string | null };
-    employee?: { avatarUrl: string | null };
-  },
-  uploadPath: string,
-): string | null {
-  if (data.employee) return data.employee.avatarUrl;
-  if (!data.business) return null;
-
-  return uploadPath.endsWith("/banner") ? data.business.bannerUrl : data.business.logoUrl;
 }
