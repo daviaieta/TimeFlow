@@ -214,8 +214,8 @@ test("todo colaborador aparece no ranking, mesmo sem agenda aberta", () => {
   const rows = rankTeam(
     [booked("50.00", { employeeId: 1 }), slot({ id: 2, employeeId: 1 })],
     [
-      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] },
-      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [] },
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [1], avatarUrl: "https://cdn/x.webp" },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [], avatarUrl: null },
     ],
   );
 
@@ -225,18 +225,20 @@ test("todo colaborador aparece no ranking, mesmo sem agenda aberta", () => {
   assert.equal(rows[0].booked, 1);
   assert.equal(rows[0].rate, 0.5);
   assert.equal(rows[0].revenue, "50.00");
+  assert.equal(rows[0].avatarUrl, "https://cdn/x.webp");
 
   assert.equal(rows[1].name, "Bruno");
   assert.equal(rows[1].slots, 0);
   assert.equal(rows[1].rate, 0);
+  assert.equal(rows[1].avatarUrl, null);
 });
 
 test("quem não tem agenda vai para o fim, mesmo com ocupação teórica maior", () => {
   const rows = rankTeam(
     [slot({ employeeId: 2 }), slot({ id: 2, employeeId: 2 })],
     [
-      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [] },
-      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [] },
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [], avatarUrl: null },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [], avatarUrl: null },
     ],
   );
 
@@ -253,8 +255,8 @@ test("ranking da equipe ordena por ocupação decrescente", () => {
       booked("10.00", { id: 4, employeeId: 2 }),
     ],
     [
-      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [] },
-      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [] },
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [], avatarUrl: null },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [], avatarUrl: null },
     ],
   );
 
@@ -298,7 +300,7 @@ test("serviço longo entra uma vez no ranking de serviços", () => {
 
 test("serviço longo não dobra a receita do colaborador", () => {
   const rows = rankTeam(longBooking("200.00"), [
-    { id: 1, name: "Samuel", pendingInvite: false, serviceIds: [1] },
+    { id: 1, name: "Samuel", pendingInvite: false, serviceIds: [1], avatarUrl: null },
   ]);
 
   assert.equal(rows[0].revenue, "200.00");
@@ -406,8 +408,8 @@ test("alerta lista colaboradores sem nenhum horário aberto", () => {
   const alerts = buildAlerts(
     [slot({ employeeId: 1 })],
     [
-      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] },
-      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [1] },
+      { id: 1, name: "Ana", pendingInvite: false, serviceIds: [1], avatarUrl: null },
+      { id: 2, name: "Bruno", pendingInvite: false, serviceIds: [1], avatarUrl: null },
     ],
     [{ id: 1, name: "Corte" }],
     7,
@@ -421,7 +423,7 @@ test("alerta lista colaboradores sem nenhum horário aberto", () => {
 test("alerta lista serviços sem profissional vinculado", () => {
   const alerts = buildAlerts(
     [],
-    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] }],
+    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1], avatarUrl: null }],
     [{ id: 1, name: "Corte" }, { id: 2, name: "Barba" }],
     7,
   );
@@ -438,7 +440,7 @@ test("alerta conta dias sem nenhum horário livre", () => {
       slot({ id: 2, isBooked: true, date: from }),
       slot({ id: 3, date: new Date("2026-07-26T00:00:00.000Z") }),
     ],
-    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [] }],
+    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [], avatarUrl: null }],
     [],
     7,
   );
@@ -451,7 +453,7 @@ test("alerta conta dias sem nenhum horário livre", () => {
 test("alerta conta convites pendentes", () => {
   const alerts = buildAlerts(
     [],
-    [{ id: 1, name: "Ana", pendingInvite: true, serviceIds: [] }],
+    [{ id: 1, name: "Ana", pendingInvite: true, serviceIds: [], avatarUrl: null }],
     [],
     7,
   );
@@ -464,7 +466,7 @@ test("alerta conta convites pendentes", () => {
 test("negócio saudável não gera alerta nenhum", () => {
   const alerts = buildAlerts(
     [slot({ employeeId: 1 })],
-    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1] }],
+    [{ id: 1, name: "Ana", pendingInvite: false, serviceIds: [1], avatarUrl: null }],
     [{ id: 1, name: "Corte" }],
     7,
   );

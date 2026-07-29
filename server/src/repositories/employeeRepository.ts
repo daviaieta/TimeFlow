@@ -19,6 +19,7 @@ export const employeeRepository = {
         name: true,
         email: true,
         password: true,
+        avatarKey: true,
         services: {
           select: { service: { select: { id: true, name: true } } },
         },

@@ -45,6 +45,7 @@ export interface EmployeeRow {
   name: string;
   pendingInvite: boolean;
   serviceIds: number[];
+  avatarUrl: string | null;
 }
 
 export interface CatalogServiceRow {
@@ -219,6 +220,7 @@ export interface TeamRow {
   id: number;
   name: string;
   pendingInvite: boolean;
+  avatarUrl: string | null;
   slots: number;
   booked: number;
   rate: number;
@@ -248,6 +250,7 @@ export function rankTeam(slots: SlotRow[], employees: EmployeeRow[]): TeamRow[] 
       id: employee.id,
       name: employee.name,
       pendingInvite: employee.pendingInvite,
+      avatarUrl: employee.avatarUrl,
       slots: own.length,
       booked: booked.length,
       rate: own.length === 0 ? 0 : booked.length / own.length,

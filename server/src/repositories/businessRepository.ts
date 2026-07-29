@@ -42,7 +42,9 @@ export const businessRepository = {
           include: {
             employees: {
               where: { employee: { password: { not: null } } },
-              include: { employee: { select: { id: true, name: true } } },
+              include: {
+                employee: { select: { id: true, name: true, avatarKey: true } },
+              },
             },
           },
         },

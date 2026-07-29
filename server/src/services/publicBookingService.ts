@@ -6,6 +6,7 @@ import { employeeRepository } from "../repositories/employeeRepository";
 import { serviceRepository } from "../repositories/serviceRepository";
 import { isSlotUpcoming, slotsFittingDuration } from "./bookingRules";
 import { createBookingForBusiness } from "./bookingService";
+import { imageService } from "./imageService";
 import {
   buildBookingSummary,
   toPublicBusinessDto,
@@ -35,13 +36,23 @@ export const publicBookingService = {
     );
 
     return toPublicBusinessDto(
-      business,
+      {
+        name: business.name,
+        slug: business.slug,
+        address: business.address,
+        logoUrl: imageService.imageUrl(business.logoKey),
+        bannerUrl: imageService.imageUrl(business.bannerKey),
+      },
       business.services.map((service) => ({
         id: service.id,
         name: service.name,
         duration: service.duration,
         price: service.price,
-        employees: service.employees.map((link) => link.employee),
+        employees: service.employees.map((link) => ({
+          id: link.employee.id,
+          name: link.employee.name,
+          avatarUrl: imageService.imageUrl(link.employee.avatarKey),
+        })),
       })),
       freeSlots,
       now,

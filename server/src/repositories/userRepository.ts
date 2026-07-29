@@ -14,6 +14,7 @@ export const userRepository = {
         name: true,
         email: true,
         role: true,
+        avatarKey: true,
         business: {
           select: {
             id: true,
@@ -22,6 +23,8 @@ export const userRepository = {
             address: true,
             planName: true,
             subscriptionStatus: true,
+            logoKey: true,
+            bannerKey: true,
           },
         },
       },

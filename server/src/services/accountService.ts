@@ -7,6 +7,7 @@ import {
 import { comparePassword, hashPassword } from "../lib/password";
 import { userRepository } from "../repositories/userRepository";
 import { normalizeEmail, requiresCurrentPassword } from "./accountRules";
+import { authService } from "./authService";
 
 interface UpdateProfileInput {
   name: string;
@@ -56,7 +57,7 @@ export const accountService = {
 
     // Devolve o mesmo shape de GET /auth/me para o cliente atualizar o
     // contexto sem uma segunda ida ao servidor.
-    return userRepository.findByIdWithBusiness(userId);
+    return authService.getProfile(userId);
   },
 
   async changePassword(

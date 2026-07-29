@@ -59,6 +59,7 @@ export const employeeService = {
       name: employee.name,
       email: employee.email,
       pendingInvite: employee.password === null,
+      avatarUrl: imageService.imageUrl(employee.avatarKey),
       services: employee.services.map((link) => link.service),
     }));
   },

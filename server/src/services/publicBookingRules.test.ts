@@ -21,7 +21,7 @@ function freeSlot(
 
 test("catálogo público omite serviço sem profissional e anexa próximo horário", () => {
   const dto = toPublicBusinessDto(
-    { name: "old-brothers", slug: "old-brothers" },
+    { name: "old-brothers", slug: "old-brothers", logoUrl: null, bannerUrl: null },
     [
       {
         id: 1,
@@ -29,8 +29,8 @@ test("catálogo público omite serviço sem profissional e anexa próximo horár
         duration: 30,
         price: "50",
         employees: [
-          { id: 13, name: "Derek" },
-          { id: 14, name: "Tiago" },
+          { id: 13, name: "Derek", avatarUrl: null },
+          { id: 14, name: "Tiago", avatarUrl: null },
         ],
       },
       { id: 2, name: "Fantasma", duration: 20, price: "10", employees: [] },
@@ -46,8 +46,13 @@ test("catálogo público omite serviço sem profissional e anexa próximo horár
   );
   assert.equal(dto.services[0].price, "50");
   assert.deepEqual(dto.services[0].employees, [
-    { id: 13, name: "Derek", nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "14:00" } },
-    { id: 14, name: "Tiago", nextSlot: null },
+    {
+      id: 13,
+      name: "Derek",
+      avatarUrl: null,
+      nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "14:00" },
+    },
+    { id: 14, name: "Tiago", avatarUrl: null, nextSlot: null },
   ]);
   // profissionais no topo: união dos serviços visíveis, sem repetir
   assert.deepEqual(
@@ -60,15 +65,21 @@ test("catálogo público omite serviço sem profissional e anexa próximo horár
 // AQUELE serviço, não para "qualquer coisa que caiba em meia hora".
 test("cada serviço anuncia o próximo horário em que ele próprio cabe", () => {
   const dto = toPublicBusinessDto(
-    { name: "old-brothers", slug: "old-brothers" },
+    { name: "old-brothers", slug: "old-brothers", logoUrl: null, bannerUrl: null },
     [
-      { id: 1, name: "Barba", duration: 30, price: "35", employees: [{ id: 13, name: "Samuel" }] },
+      {
+        id: 1,
+        name: "Barba",
+        duration: 30,
+        price: "35",
+        employees: [{ id: 13, name: "Samuel", avatarUrl: null }],
+      },
       {
         id: 2,
         name: "Descoloração",
         duration: 60,
         price: "200",
-        employees: [{ id: 13, name: "Samuel" }],
+        employees: [{ id: 13, name: "Samuel", avatarUrl: null }],
       },
     ],
     [
@@ -83,6 +94,38 @@ test("cada serviço anuncia o próximo horário em que ele próprio cabe", () =>
   assert.equal(dto.services[1].employees[0].nextSlot?.startTime, "10:00");
   // Sem serviço escolhido, o card do profissional mostra a primeira vaga.
   assert.equal(dto.professionals[0].nextSlot?.startTime, "09:00");
+});
+
+test("toPublicBusinessDto repassa as imagens do negócio e dos profissionais", () => {
+  const dto = toPublicBusinessDto(
+    {
+      name: "Barbearia Alfa",
+      slug: "alfa",
+      address: null,
+      logoUrl: "https://cdn.exemplo.com/businesses/1/logo-a.webp",
+      bannerUrl: null,
+    },
+    [
+      {
+        id: 1,
+        name: "Corte",
+        duration: 30,
+        price: "40.00",
+        employees: [
+          { id: 9, name: "Zé", avatarUrl: "https://cdn.exemplo.com/employees/9/avatar-b.webp" },
+        ],
+      },
+    ],
+    [],
+    new Date("2026-07-29T12:00:00.000Z"),
+  );
+
+  assert.equal(dto.business.logoUrl, "https://cdn.exemplo.com/businesses/1/logo-a.webp");
+  assert.equal(dto.business.bannerUrl, null);
+  assert.equal(
+    dto.professionals[0].avatarUrl,
+    "https://cdn.exemplo.com/employees/9/avatar-b.webp",
+  );
 });
 
 test("slot público serializa a data como ISO", () => {

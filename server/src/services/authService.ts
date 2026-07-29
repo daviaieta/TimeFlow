@@ -8,6 +8,7 @@ import {
 import { TooManyRequestsError, UnauthorizedError } from "../lib/errors";
 import { createRateLimiter } from "../lib/rateLimit";
 import { userRepository } from "../repositories/userRepository";
+import { imageService } from "./imageService";
 
 // Por IP, não por e-mail: limitar por e-mail deixaria qualquer um bloquear a
 // recuperação de uma conta alheia só pedindo reset várias vezes.
@@ -91,6 +92,25 @@ export const authService = {
       throw new UnauthorizedError("Invalid or missing token");
     }
 
-    return user;
+    // A key nunca sai para o cliente: o front recebe URL pronta e não sabe
+    // nada sobre o bucket.
+    const { avatarKey, business, ...rest } = user;
+
+    return {
+      ...rest,
+      avatarUrl: imageService.imageUrl(avatarKey),
+      business: business
+        ? {
+            id: business.id,
+            name: business.name,
+            slug: business.slug,
+            address: business.address,
+            planName: business.planName,
+            subscriptionStatus: business.subscriptionStatus,
+            logoUrl: imageService.imageUrl(business.logoKey),
+            bannerUrl: imageService.imageUrl(business.bannerKey),
+          }
+        : null,
+    };
   },
 };
