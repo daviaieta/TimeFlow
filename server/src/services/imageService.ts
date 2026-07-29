@@ -29,7 +29,10 @@ export const imageService = {
     try {
       await getStorage().delete(key);
     } catch (error) {
-      console.error(`Falha ao apagar o objeto ${key}:`, error);
+      // Sem a key na mensagem: ela é o próprio caminho da URL e carrega o
+      // sufixo aleatório que torna a imagem não adivinhável — não é para
+      // ir em log.
+      console.error("Falha ao apagar objeto de imagem:", error);
     }
   },
 

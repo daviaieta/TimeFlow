@@ -4,6 +4,7 @@ import { after, before, beforeEach, test } from "node:test";
 import { Role } from "@prisma/client";
 import { FastifyInstance } from "fastify";
 import { buildApp } from "../app";
+import { MAX_IMAGE_BYTES } from "../services/imageRules";
 import { seedBookableBusiness } from "./factories";
 import { ensureTestSchema, resetDatabase, testPrisma } from "./testDb";
 
@@ -73,6 +74,28 @@ test("ADMIN sobe a logo e recebe a URL pronta", async () => {
   assert.match(saved.logoKey ?? "", /^businesses\/\d+\/logo-[0-9a-f]+\.png$/);
 });
 
+test("GET no caminho da logoUrl devolve os bytes que foram salvos", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const bytes = pngBytes();
+  const { payload, headers } = multipart(bytes);
+
+  const uploadResponse = await app.inject({
+    method: "POST",
+    url: `/businesses/${alfa.business.id}/logo`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.admin)}` },
+    payload,
+  });
+
+  const logoUrl = uploadResponse.json().business.logoUrl as string;
+  // app.inject não fala HTTP de verdade: só o caminho, sem origem.
+  const path = new URL(logoUrl).pathname;
+
+  const getResponse = await app.inject({ method: "GET", url: path });
+
+  assert.equal(getResponse.statusCode, 200);
+  assert.ok(getResponse.rawPayload.equals(bytes));
+});
+
 test("arquivo que não é imagem responde 400 e não grava nada", async () => {
   const alfa = await seedBookableBusiness("alfa");
   const { payload, headers } = multipart(Buffer.from("nao sou imagem"), "malicioso.png");
@@ -128,6 +151,30 @@ test("DELETE limpa a key da logo", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.json().business.logoUrl, null);
+  const saved = await testPrisma.business.findUniqueOrThrow({
+    where: { id: alfa.business.id },
+  });
+  assert.equal(saved.logoKey, null);
+});
+
+test("upload maior que 2 MB responde 4xx em português e não grava nada", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const oversizedBytes = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.alloc(MAX_IMAGE_BYTES + 1024),
+  ]);
+  const { payload, headers } = multipart(oversizedBytes);
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/businesses/${alfa.business.id}/logo`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.admin)}` },
+    payload,
+  });
+
+  assert.ok(response.statusCode >= 400 && response.statusCode < 500);
+  assert.equal(response.json().message, "A imagem precisa ter no máximo 2 MB.");
+
   const saved = await testPrisma.business.findUniqueOrThrow({
     where: { id: alfa.business.id },
   });

@@ -57,8 +57,11 @@ export function buildApp(): FastifyInstance {
     app.register(fastifyStatic, {
       root: env.storage.rootDir,
       prefix: "/uploads/",
-      // A pasta pode não existir ainda no primeiro boot.
-      wildcard: false,
+      // Sem wildcard: false — com ele, o plugin listaria a pasta uma única
+      // vez no registro e só serviria os arquivos que já existiam naquele
+      // instante; todo upload real acontece depois do boot e viraria 404
+      // para sempre. O plugin já tolera a pasta ainda não existir no
+      // primeiro boot (registra um log.warn e segue).
     });
   }
 

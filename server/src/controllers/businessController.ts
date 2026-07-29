@@ -1,7 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { BadRequestError } from "../lib/errors";
 import { businessService } from "../services/businessService";
-import { MAX_IMAGE_BYTES } from "../services/imageRules";
 
 export interface CreateBusinessBody {
   name: string;
@@ -79,14 +78,18 @@ async function readUploadedImage(request: FastifyRequest): Promise<Buffer> {
     throw new BadRequestError('Envie a imagem no campo "file".');
   }
 
-  // O plugin já corta em MAX_IMAGE_BYTES e o toBuffer lança quando estourou —
-  // deixar subir vira 413 no error handler, que é o status certo.
-  const bytes = await file.toBuffer();
-  if (bytes.length > MAX_IMAGE_BYTES) {
-    throw new BadRequestError("A imagem precisa ter no máximo 2 MB.");
-  }
+  try {
+    // O plugin corta o stream em MAX_IMAGE_BYTES e toBuffer lança antes de
+    // devolver qualquer conteúdo — nunca chega a existir um Buffer maior
+    // que o limite para checar depois.
+    return await file.toBuffer();
+  } catch (error) {
+    if ((error as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") {
+      throw new BadRequestError("A imagem precisa ter no máximo 2 MB.");
+    }
 
-  return bytes;
+    throw error;
+  }
 }
 
 export async function uploadBusinessLogo(
