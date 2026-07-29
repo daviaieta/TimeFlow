@@ -7,7 +7,7 @@ function resolveInside(rootDir: string, key: string): string {
   const root = path.resolve(rootDir);
 
   if (target !== root && !target.startsWith(root + path.sep)) {
-    throw new Error(`Caminho inválido para o storage: ${key}`);
+    throw new Error("Caminho inválido para o storage");
   }
 
   return target;
