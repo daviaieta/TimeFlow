@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
+import { ImageUploadField } from "@/components/image-upload-field";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { IMAGE_PRESETS } from "@/lib/image";
 import { SLUG_PATTERN } from "@/lib/platform";
 import { useRefreshAuthUser } from "../auth-context";
 
@@ -28,13 +30,22 @@ function translateError(error: unknown): string {
 export function BusinessCard({
   business,
 }: {
-  business: { id: number; name: string; slug: string; address: string | null };
+  business: {
+    id: number;
+    name: string;
+    slug: string;
+    address: string | null;
+    logoUrl: string | null;
+    bannerUrl: string | null;
+  };
 }) {
   const refresh = useRefreshAuthUser();
 
   const [name, setName] = useState(business.name);
   const [slug, setSlug] = useState(business.slug);
   const [address, setAddress] = useState(business.address ?? "");
+  const [logoUrl, setLogoUrl] = useState(business.logoUrl);
+  const [bannerUrl, setBannerUrl] = useState(business.bannerUrl);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -80,6 +91,33 @@ export function BusinessCard({
       <p className="mt-1 text-sm text-muted-foreground">
         O que seus clientes veem na página pública.
       </p>
+
+      <div className="mt-6 space-y-6">
+        <ImageUploadField
+          label="Logo"
+          description="Quadrada, aparece na sua página pública e no painel. JPG, PNG ou WebP de até 2 MB."
+          preset={IMAGE_PRESETS.logo}
+          currentUrl={logoUrl}
+          uploadPath={`/businesses/${business.id}/logo`}
+          onDone={async (url) => {
+            setLogoUrl(url);
+            await refresh();
+          }}
+        />
+
+        <ImageUploadField
+          label="Banner"
+          description="Imagem larga do topo da sua página pública. JPG, PNG ou WebP de até 2 MB."
+          preset={IMAGE_PRESETS.banner}
+          shape="wide"
+          currentUrl={bannerUrl}
+          uploadPath={`/businesses/${business.id}/banner`}
+          onDone={async (url) => {
+            setBannerUrl(url);
+            await refresh();
+          }}
+        />
+      </div>
 
       <form onSubmit={handleSubmit} className="mt-6">
         <FieldGroup>
