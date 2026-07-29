@@ -139,6 +139,13 @@ GET    /public/businesses/:slug          público — catálogo do negócio
 GET    /public/businesses/:slug/employees/:employeeId/slots?serviceId=
                                          público — horários em que o serviço cabe
 POST   /public/businesses/:slug/bookings público — cria a reserva
+
+POST   /businesses/:id/logo              ADMIN — multipart, campo file
+DELETE /businesses/:id/logo              ADMIN
+POST   /businesses/:id/banner            ADMIN — multipart, campo file
+DELETE /businesses/:id/banner            ADMIN
+POST   /employees/:id/avatar             ADMIN, EMPLOYEE — multipart, campo file
+DELETE /employees/:id/avatar             ADMIN, EMPLOYEE
 ```
 
 ## Decisões de modelagem
@@ -162,6 +169,14 @@ a tabela viria antes da necessidade.
 **Convite no lugar de cadastro.** Admins e colaboradores nascem sem senha, com
 um token de convite expirável; a senha é definida em `/accept-invite`. Ninguém
 cria a própria conta.
+
+**A imagem mora fora do banco, e o banco só guarda a key.** Logo, banner e
+avatar vão para um bucket (Cloudflare R2 em produção, disco local em
+desenvolvimento) e o Postgres guarda só `businesses/12/logo-9f3a.webp`. A URL
+pública é montada na camada de service a partir de uma variável de ambiente:
+trocar de bucket ou de domínio não exige tocar em uma linha sequer do banco. O
+sufixo aleatório na key impede adivinhar a imagem de outro negócio e garante
+que a troca de foto não seja servida do cache com a versão antiga.
 
 ## Estado atual
 
