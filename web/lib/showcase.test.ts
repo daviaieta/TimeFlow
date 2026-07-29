@@ -44,7 +44,7 @@ function service(
     name,
     duration: 30,
     price: "45.00",
-    employees: employees.map((employee) => ({ ...employee, nextSlot: null })),
+    employees: employees.map((employee) => ({ ...employee, avatarUrl: null, nextSlot: null })),
   };
 }
 

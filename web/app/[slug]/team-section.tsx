@@ -27,7 +27,7 @@ export function TeamSection({ catalog, todayKey }: TeamSectionProps) {
               key={professional.id}
               className="flex items-start gap-4 rounded-2xl border p-4"
             >
-              <TeamAvatar name={professional.name} />
+              <TeamAvatar name={professional.name} src={professional.avatarUrl} />
 
               <div className="min-w-0">
                 <p className="truncate font-medium">{professional.name}</p>

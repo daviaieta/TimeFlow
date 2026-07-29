@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 interface TeamAvatarProps {
   name: string;
-  /** Reservado para a Fase 2, quando o colaborador puder ter foto. */
+  /** URL pública da imagem; sem ela, cai nas iniciais. */
   src?: string | null;
   className?: string;
 }
