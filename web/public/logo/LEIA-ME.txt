@@ -1,0 +1,18 @@
+TIME FLOW — LOGO
+Cores: brand #4F39F6 · brand escuro #3B28C4 · tinta #0E0E12 · papel #FFFFFF
+
+simbolo-*.svg ........ símbolo solto (320x320)
+simbolo-currentcolor.svg ... herda a cor do CSS (ideal para React/HTML)
+simbolo-compacto-24px.svg .. traço reforçado para 24-32px
+badge-*.svg .......... símbolo dentro do badge (512x512)
+favicon.svg .......... badge circular roxo
+lockup-horizontal-* .. símbolo + "Time Flow"
+lockup-vertical-* .... símbolo acima do nome
+
+Os lockups usam a fonte Figtree Semibold (Google Fonts).
+Se o seu sistema não tiver a fonte, converta o texto em contorno
+no Figma/Illustrator antes de publicar.
+
+Versões brancas: usar apenas sobre fundo escuro ou roxo.
+Respiro mínimo em volta da logo = altura do símbolo.
+Lockup horizontal: mínimo 96px de largura. Símbolo: mínimo 20px.

@@ -3,6 +3,9 @@ export interface Service {
   name: string;
   duration: number;
   price: string; // Prisma Decimal serializa como string no JSON
+  // O outro lado do N:N. Serviço com a lista vazia não pode ser reservado por
+  // ninguém — é o que a tela de serviços precisa mostrar.
+  employees: EmployeeServiceLink[];
 }
 
 export interface EmployeeServiceLink {

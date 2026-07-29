@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="420" viewBox="0 0 520 420" role="img" aria-label="Time Flow">
+  <g transform="translate(180,0) scale(0.5)">
+  <g fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round">
+    <circle cx="144" cy="160" r="76"></circle>
+    <path d="M144 112 L144 160"></path>
+    <path d="M144 160 L250 160"></path>
+  </g>
+  </g>
+  <text x="260" y="360" text-anchor="middle" font-family="Figtree, Helvetica, Arial, sans-serif" font-size="96" font-weight="600" letter-spacing="-3" fill="#FFFFFF">Time Flow</text>
+</svg>

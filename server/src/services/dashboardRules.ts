@@ -390,6 +390,25 @@ export function buildUpcoming(
     }));
 }
 
+// Um dia lotado é oportunidade perdida, não sucesso: quem tentou marcar nele
+// não conseguiu. Só conta dia que teve algum horário — dia sem grade nenhuma
+// não está "lotado", está fechado.
+function countFullyBookedDays(slots: SlotRow[]): number {
+  const perDay = new Map<string, { total: number; free: number }>();
+
+  for (const slot of slots) {
+    const key = slot.date.toISOString().slice(0, 10);
+    const entry = perDay.get(key) ?? { total: 0, free: 0 };
+    entry.total += 1;
+    if (!slot.isBooked) entry.free += 1;
+    perDay.set(key, entry);
+  }
+
+  return [...perDay.values()].filter(
+    (entry) => entry.total > 0 && entry.free === 0,
+  ).length;
+}
+
 // Alertas são texto pronto: quem monta a frase é quem conhece a regra, não a UI.
 export function buildAlerts(
   slots: SlotRow[],
@@ -427,18 +446,7 @@ export function buildAlerts(
     });
   }
 
-  const perDay = new Map<string, { total: number; free: number }>();
-  for (const slot of slots) {
-    const key = slot.date.toISOString().slice(0, 10);
-    const entry = perDay.get(key) ?? { total: 0, free: 0 };
-    entry.total += 1;
-    if (!slot.isBooked) entry.free += 1;
-    perDay.set(key, entry);
-  }
-
-  const fullDays = [...perDay.values()].filter(
-    (entry) => entry.total > 0 && entry.free === 0,
-  ).length;
+  const fullDays = countFullyBookedDays(slots);
 
   if (fullDays > 0) {
     alerts.push({
@@ -454,6 +462,38 @@ export function buildAlerts(
       kind: "pending-invite",
       count: pending,
       label: `${pending} ${plural(pending, "convite pendente", "convites pendentes")}`,
+    });
+  }
+
+  return alerts;
+}
+
+// A versão do colaborador: `slots` já chega recortado na agenda dele, então
+// aqui nada mais é filtrado. Convite pendente e serviço órfão ficam de fora —
+// nenhum dos dois é problema que ele resolve.
+export function buildEmployeeAlerts(
+  slots: SlotRow[],
+  days: number,
+): DashboardAlert[] {
+  const alerts: DashboardAlert[] = [];
+
+  if (slots.length === 0) {
+    alerts.push({
+      kind: "employee-no-slots",
+      count: 1,
+      label: `Você não tem nenhum horário aberto nos próximos ${days} dias`,
+    });
+  }
+
+  const fullDays = countFullyBookedDays(slots);
+
+  if (fullDays > 0) {
+    alerts.push({
+      kind: "day-fully-booked",
+      count: fullDays,
+      label:
+        `Você está com ${fullDays} ${plural(fullDays, "dia", "dias")} ` +
+        `sem nenhum horário livre`,
     });
   }
 

@@ -2,9 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon, Cancel01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -26,17 +25,12 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/empty-state";
 import { Employee, EmployeeServiceLink, Service } from "@/lib/types";
 import { useAuthUser } from "../auth-context";
+import { EmployeeCard } from "./employee-card";
 
 export default function TeamPage() {
   const user = useAuthUser();
@@ -61,6 +55,9 @@ export default function TeamPage() {
     employeeId: number;
     message: string;
   } | null>(null);
+  // Guardado por colaborador, não como booleano global: travar a tela inteira
+  // porque um card está salvando seria pior que não dar retorno nenhum.
+  const [linkingId, setLinkingId] = useState<number | null>(null);
 
   const [unlinking, setUnlinking] = useState<{
     employee: Employee;
@@ -126,6 +123,7 @@ export default function TeamPage() {
 
   async function handleLinkService(employee: Employee, serviceId: string) {
     setLinkError(null);
+    setLinkingId(employee.id);
 
     try {
       await fetchAdapter({
@@ -139,6 +137,8 @@ export default function TeamPage() {
         employeeId: employee.id,
         message: err instanceof ApiError ? err.message : "Erro inesperado.",
       });
+    } finally {
+      setLinkingId(null);
     }
   }
 
@@ -177,17 +177,26 @@ export default function TeamPage() {
     }
   }
 
+  const idle = employees.filter(
+    (employee) => employee.services.length === 0,
+  ).length;
+
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-7xl">
       {/* Empilha no celular: lado a lado, "Convidar colaborador" espremeria o
           título até ele quebrar em três linhas. */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Equipe</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isAdmin
-              ? "Convide colaboradores e vincule serviços a cada um."
-              : "Colaboradores do negócio."}
+            {/* Mesma regra da tela de serviços: a contagem só aparece quando
+                existe contagem de verdade. */}
+            {loading || listError
+              ? isAdmin
+                ? "Convide colaboradores e vincule serviços a cada um."
+                : "Colaboradores do negócio."
+              : `${employees.length} ${employees.length === 1 ? "colaborador" : "colaboradores"}` +
+                (idle > 0 ? ` · ${idle} sem serviço vinculado` : "")}
           </p>
         </div>
         {isAdmin && (
@@ -200,117 +209,56 @@ export default function TeamPage() {
 
       <div className="mt-8 flex flex-col gap-4">
         {loading ? (
-          <div className="flex items-center justify-center rounded-2xl border bg-card p-12">
-            <Spinner />
-          </div>
+          <>
+            <Skeleton className="h-36" />
+            <Skeleton className="h-36" />
+          </>
         ) : listError ? (
           <p className="rounded-2xl border bg-card p-12 text-center text-sm text-destructive">
             {listError}
           </p>
         ) : employees.length === 0 ? (
-          <p className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground">
-            Nenhum colaborador convidado ainda.
-          </p>
+          <div className="rounded-2xl border bg-card shadow-sm">
+            <EmptyState
+              icon={UserGroupIcon}
+              title="Nenhum colaborador convidado ainda"
+              description={
+                isAdmin
+                  ? "Convide quem atende no seu negócio. Cada um recebe um e-mail para definir a senha e passa a gerenciar a própria agenda."
+                  : "O administrador ainda não convidou ninguém para a equipe."
+              }
+              action={
+                isAdmin ? (
+                  <Button size="sm" onClick={openInvite}>
+                    <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+                    Convidar colaborador
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
         ) : (
-          employees.map((employee) => {
-            const unlinkedServices = services.filter(
-              (service) =>
-                !employee.services.some((linked) => linked.id === service.id),
-            );
-
-            return (
-              <div
-                key={employee.id}
-                className="rounded-2xl border bg-card p-5 shadow-sm"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate font-medium">{employee.name}</p>
-                      <Badge variant={employee.pendingInvite ? "outline" : "default"}>
-                        {employee.pendingInvite ? "Convite pendente" : "Ativo"}
-                      </Badge>
-                    </div>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {employee.email}
-                    </p>
-                  </div>
-
-                  {isAdmin && (
-                    <div className="flex items-center gap-2">
-                      {unlinkedServices.length > 0 && (
-                        <Select
-                          value=""
-                          onValueChange={(value) => {
-                            if (value) handleLinkService(employee, value);
-                          }}
-                        >
-                          <SelectTrigger className="w-44" size="sm">
-                            <SelectValue placeholder="Vincular serviço" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {unlinkedServices.map((service) => (
-                                <SelectItem
-                                  key={service.id}
-                                  value={String(service.id)}
-                                >
-                                  {service.name}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Remover ${employee.name}`}
-                        onClick={() => {
-                          setRemoveError(null);
-                          setRemoving(employee);
-                        }}
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {linkError?.employeeId === employee.id && (
-                  <p className="mt-2 text-sm text-destructive">
-                    {linkError.message}
-                  </p>
-                )}
-
-                {employee.services.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {employee.services.map((service) => (
-                      <Badge
-                        key={service.id}
-                        variant="secondary"
-                        className={isAdmin ? "gap-1 pr-1" : undefined}
-                      >
-                        {service.name}
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            aria-label={`Desvincular ${service.name}`}
-                            onClick={() => {
-                              setUnlinkError(null);
-                              setUnlinking({ employee, service });
-                            }}
-                          >
-                            <HugeiconsIcon icon={Cancel01Icon} size={12} />
-                          </button>
-                        )}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })
+          employees.map((employee) => (
+            <EmployeeCard
+              key={employee.id}
+              employee={employee}
+              services={services}
+              isAdmin={isAdmin}
+              linking={linkingId === employee.id}
+              linkError={
+                linkError?.employeeId === employee.id ? linkError.message : null
+              }
+              onLink={handleLinkService}
+              onUnlink={(target, service) => {
+                setUnlinkError(null);
+                setUnlinking({ employee: target, service });
+              }}
+              onRemove={(target) => {
+                setRemoveError(null);
+                setRemoving(target);
+              }}
+            />
+          ))
         )}
       </div>
 

@@ -73,6 +73,18 @@ export interface DashboardOverview {
   alerts: DashboardAlert[];
 }
 
+// O que `GET /dashboard/me` devolve: mesma leitura, recortada na agenda de um
+// colaborador só. Sem `team` — ele não tem equipe abaixo dele.
+export interface EmployeeOverview {
+  range: { days: number; from: string; to: string };
+  kpis: DashboardKpis;
+  occupancyByBucket: OccupancyBucket[];
+  heatmap: HeatmapCell[];
+  services: ServiceRankRow[];
+  upcoming: UpcomingBooking[];
+  alerts: DashboardAlert[];
+}
+
 const currency = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",

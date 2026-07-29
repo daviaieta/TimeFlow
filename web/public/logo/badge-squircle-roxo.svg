@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 320 320" role="img" aria-label="Time Flow">
+  <rect x="0" y="0" width="320" height="320" rx="80" fill="#4F39F6"></rect>
+  <g fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round">
+    <circle cx="144" cy="160" r="76"></circle>
+    <path d="M144 112 L144 160"></path>
+    <path d="M144 160 L250 160"></path>
+  </g>
+</svg>

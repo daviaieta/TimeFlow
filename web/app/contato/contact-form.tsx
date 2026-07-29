@@ -87,7 +87,7 @@ export function ContactForm() {
       <div className="flex flex-col items-center rounded-2xl border border-indigo-100 bg-card p-10 text-center shadow-sm">
         <HugeiconsIcon
           icon={CheckmarkCircle02Icon}
-          className="size-10 text-indigo-600"
+          className="size-10 text-primary"
         />
         <h2 className="mt-4 text-xl font-semibold text-foreground">
           Mensagem enviada

@@ -23,19 +23,37 @@ const slotSelect = {
   },
 } as const;
 
+// O painel do colaborador é o mesmo recorte do painel do dono, restrito a uma
+// pessoa. `employeeId` entra no where junto do businessId — nunca no lugar
+// dele: um id de colaborador de outro negócio não pode virar consulta válida.
 export const dashboardRepository = {
-  findSlotsInRange(businessId: number, from: Date, to: Date) {
+  findSlotsInRange(
+    businessId: number,
+    from: Date,
+    to: Date,
+    employeeId?: number,
+  ) {
     return prisma.availability.findMany({
-      where: { employee: { businessId }, date: { gte: from, lt: to } },
+      where: { employee: { businessId }, employeeId, date: { gte: from, lt: to } },
       select: slotSelect,
     });
   },
 
   // Query separada da janela: "próximas reservas" é sempre o que vem agora,
   // independente do período que o dono selecionou.
-  findUpcomingBooked(businessId: number, from: Date, take: number) {
+  findUpcomingBooked(
+    businessId: number,
+    from: Date,
+    take: number,
+    employeeId?: number,
+  ) {
     return prisma.availability.findMany({
-      where: { employee: { businessId }, isBooked: true, date: { gte: from } },
+      where: {
+        employee: { businessId },
+        employeeId,
+        isBooked: true,
+        date: { gte: from },
+      },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
       take,
       select: {
@@ -56,9 +74,22 @@ export const dashboardRepository = {
     });
   },
 
-  countBookingsCreatedBetween(businessId: number, from: Date, to: Date) {
+  countBookingsCreatedBetween(
+    businessId: number,
+    from: Date,
+    to: Date,
+    employeeId?: number,
+  ) {
     return prisma.booking.count({
-      where: { service: { businessId }, createdAt: { gte: from, lt: to } },
+      where: {
+        service: { businessId },
+        createdAt: { gte: from, lt: to },
+        // Booking não guarda employeeId: quem liga reserva e profissional é a
+        // Availability tomada por ela.
+        ...(employeeId === undefined
+          ? {}
+          : { availabilities: { some: { employeeId } } }),
+      },
     });
   },
 };

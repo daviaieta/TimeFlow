@@ -1,6 +1,10 @@
 import { Role } from "@prisma/client";
 import { FastifyInstance } from "fastify";
-import { getOverview, OverviewQuery } from "../controllers/dashboardController";
+import {
+  getMyOverview,
+  getOverview,
+  OverviewQuery,
+} from "../controllers/dashboardController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
 import { requireActiveSubscription } from "../middlewares/requireActiveSubscription";
@@ -24,5 +28,18 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [authenticate, requireActiveSubscription, authorize(Role.ADMIN)],
     },
     getOverview,
+  );
+
+  app.get<{ Querystring: OverviewQuery }>(
+    "/dashboard/me",
+    {
+      schema: overviewSchema,
+      preHandler: [
+        authenticate,
+        requireActiveSubscription,
+        authorize(Role.EMPLOYEE),
+      ],
+    },
+    getMyOverview,
   );
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SlotRow, buildKpis, formatCents, toCents, bucketOccupancy, buildHeatmap, rankTeam, rankServices, buildUpcoming, buildAlerts, UpcomingSlotRow } from "./dashboardRules";
+import { SlotRow, buildKpis, formatCents, toCents, bucketOccupancy, buildHeatmap, rankTeam, rankServices, buildUpcoming, buildAlerts, buildEmployeeAlerts, UpcomingSlotRow } from "./dashboardRules";
 
 // Helper local: monta um slot com o mínimo e deixa o teste declarar só o que importa.
 function slot(overrides: Partial<SlotRow> = {}): SlotRow {
@@ -470,4 +470,41 @@ test("negócio saudável não gera alerta nenhum", () => {
   );
 
   assert.deepEqual(alerts, []);
+});
+
+test("colaborador sem nenhum horário na janela é avisado", () => {
+  const alerts = buildEmployeeAlerts([], 30);
+
+  assert.deepEqual(alerts, [
+    {
+      kind: "employee-no-slots",
+      count: 1,
+      label: "Você não tem nenhum horário aberto nos próximos 30 dias",
+    },
+  ]);
+});
+
+test("colaborador é avisado dos próprios dias lotados", () => {
+  const alerts = buildEmployeeAlerts(
+    [
+      slot({ id: 1, isBooked: true, date: from }),
+      slot({ id: 2, isBooked: true, date: from }),
+      slot({ id: 3, date: new Date("2026-07-26T00:00:00.000Z") }),
+    ],
+    7,
+  );
+
+  assert.deepEqual(alerts, [
+    {
+      kind: "day-fully-booked",
+      count: 1,
+      label: "Você está com 1 dia sem nenhum horário livre",
+    },
+  ]);
+});
+
+// Convite pendente e serviço órfão são problema do dono. O colaborador com a
+// agenda aberta e com folga não tem nada a resolver.
+test("agenda aberta e com folga não gera alerta para o colaborador", () => {
+  assert.deepEqual(buildEmployeeAlerts([slot({ employeeId: 1 })], 7), []);
 });

@@ -58,7 +58,7 @@ export default function ContatoPage() {
     <div className="flex flex-1 flex-col">
       <LandingHeader />
 
-      <section className="bg-gradient-to-b from-indigo-700 to-indigo-500 pb-20">
+      <section className="bg-gradient-to-b from-indigo-700 to-indigo-500 pb-20 dark:from-indigo-900 dark:to-indigo-800">
         <div className="mx-auto max-w-3xl px-6 pt-16 text-center sm:pt-24">
           <p className="text-sm font-medium text-indigo-100">Fale comigo</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
@@ -85,7 +85,7 @@ export default function ContatoPage() {
                   <li key={promise.title} className="flex gap-3">
                     <HugeiconsIcon
                       icon={promise.icon}
-                      className="mt-0.5 size-5 shrink-0 text-indigo-600"
+                      className="mt-0.5 size-5 shrink-0 text-primary"
                     />
                     <div>
                       <p className="text-sm font-medium text-foreground">

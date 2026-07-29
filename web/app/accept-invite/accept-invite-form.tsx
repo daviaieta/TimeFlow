@@ -40,7 +40,7 @@ export function AcceptInviteForm() {
       <div className="flex flex-col items-center gap-3 text-center">
         <HugeiconsIcon
           icon={CheckmarkCircle02Icon}
-          className="size-8 text-indigo-600"
+          className="size-8 text-primary"
         />
         <p className="font-medium">Senha definida com sucesso!</p>
         <p className="text-sm text-muted-foreground">

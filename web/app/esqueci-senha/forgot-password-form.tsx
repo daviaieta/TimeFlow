@@ -22,7 +22,7 @@ export function ForgotPasswordForm() {
       <div className="flex flex-col items-center gap-3 text-center">
         <HugeiconsIcon
           icon={MailValidation01Icon}
-          className="size-8 text-indigo-600"
+          className="size-8 text-primary"
         />
         <p className="font-medium">Verifique seu e-mail</p>
         <p className="text-sm text-muted-foreground">

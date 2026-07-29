@@ -8,14 +8,11 @@ import { Button } from "@/components/ui/button";
 import { BusinessTable } from "@/components/dashboard/business-table";
 import { CreateBusinessDialog } from "@/components/dashboard/create-business-dialog";
 import { PlatformTiles } from "@/components/dashboard/platform-tiles";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   BusinessRow,
   PlatformOverview as PlatformOverviewData,
 } from "@/lib/platform";
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse rounded-2xl bg-muted ${className ?? ""}`} />;
-}
 
 export function PlatformOverview() {
   const [data, setData] = useState<PlatformOverviewData | null>(null);

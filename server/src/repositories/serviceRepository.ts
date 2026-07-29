@@ -14,6 +14,22 @@ export const serviceRepository = {
     });
   },
 
+  // Variante separada em vez de um include na de cima: o dashboard chama a
+  // outra a cada carregamento e só precisa de id e nome — não vale pagar o
+  // join lá para servir a tela de serviços.
+  findManyByBusinessWithEmployees(businessId: number) {
+    return prisma.service.findMany({
+      where: { businessId },
+      orderBy: { name: "asc" },
+      include: {
+        employees: {
+          orderBy: { employee: { name: "asc" } },
+          select: { employee: { select: { id: true, name: true } } },
+        },
+      },
+    });
+  },
+
   findById(id: number) {
     return prisma.service.findUnique({ where: { id } });
   },

@@ -4,46 +4,39 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
 import { Button } from "@/components/ui/button";
 import { AlertsList } from "@/components/dashboard/alerts-list";
-import { EmployeeOverview } from "@/components/dashboard/employee-overview";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { OccupancyChart } from "@/components/dashboard/occupancy-chart";
 import { OccupancyHeatmap } from "@/components/dashboard/occupancy-heatmap";
 import { Panel } from "@/components/dashboard/panel";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
-import { PlatformOverview } from "@/components/dashboard/platform-overview";
 import { ServiceRank } from "@/components/dashboard/service-rank";
-import { TeamTable } from "@/components/dashboard/team-table";
 import { UpcomingList } from "@/components/dashboard/upcoming-list";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DashboardOverview, PeriodDays, formatRangeLabel } from "@/lib/dashboard";
-import { useAuthUser } from "./auth-context";
+import { AuthUser } from "@/lib/auth";
+import {
+  EmployeeOverview as EmployeeOverviewData,
+  PeriodDays,
+  formatRangeLabel,
+} from "@/lib/dashboard";
 
-export default function DashboardPage() {
-  const user = useAuthUser();
-  const isAdmin = user.role === "ADMIN";
-  const isSuperadmin = user.role === "SUPERADMIN";
-
+export function EmployeeOverview({ user }: { user: AuthUser }) {
   const [days, setDays] = useState<PeriodDays>(7);
-  const [data, setData] = useState<DashboardOverview | null>(null);
+  const [data, setData] = useState<EmployeeOverviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  // `isPending` só liga quando o `startTransition` do efeito de montagem já
-  // rodou (pós-commit) — entre a primeira pintura e esse momento ele fica
-  // `false` mesmo sem nenhum dado carregado ainda. Gatear o seletor por
-  // `data === null` também fecha essa janela: ele começa desabilitado na
-  // primeira pintura e só libera quando existe algum dado para trocar de
-  // período em cima — mesmo que um primeiro load tenha falhado, o usuário
-  // ainda pode reagir pelo botão "Tentar de novo" (que só depende de
-  // `isPending`), sem o seletor liberar sem nunca ter havido dado.
+
+  // Mesma trava do painel do dono: entre a primeira pintura e o commit da
+  // transition o `isPending` ainda é false, então `data === null` fecha essa
+  // janela em que o seletor apareceria clicável sem nada para trocar.
   const selectorDisabled = isPending || data === null;
 
   // Devolve uma promise que nunca rejeita: erros de rede viram estado local,
   // para que `await load(...)` dentro da transition sempre resolva e o
   // `isPending` volte a false mesmo quando o fetch falha.
   const load = useCallback((period: PeriodDays) => {
-    return fetchAdapter<DashboardOverview>({
+    return fetchAdapter<EmployeeOverviewData>({
       method: "GET",
-      path: `/dashboard/overview?days=${period}`,
+      path: `/dashboard/me?days=${period}`,
     })
       .then(({ data: overview }) => {
         setData(overview);
@@ -54,10 +47,6 @@ export default function DashboardPage() {
       });
   }, []);
 
-  // O fetch roda dentro de uma transition (em vez de um setState síncrono no
-  // corpo do efeito) para não disparar o lint `react-hooks/set-state-in-effect`
-  // e para que `isPending` sirva como indicador de carregamento — tanto no
-  // efeito de troca de período quanto no retry manual do botão de erro.
   const runLoad = useCallback(
     (period: PeriodDays) => {
       startTransition(async () => {
@@ -68,14 +57,8 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    if (isAdmin) runLoad(days);
-  }, [isAdmin, days, runLoad]);
-
-  // O SUPERADMIN não tem businessId, então nada do dashboard de ocupação se
-  // aplica a ele: vai para o painel da plataforma. O EMPLOYEE tem o seu, com
-  // a mesma leitura recortada na própria agenda.
-  if (isSuperadmin) return <PlatformOverview />;
-  if (!isAdmin) return <EmployeeOverview user={user} />;
+    runLoad(days);
+  }, [days, runLoad]);
 
   const firstName = user.name.split(" ")[0];
 
@@ -87,9 +70,7 @@ export default function DashboardPage() {
             Olá, {firstName} 👋
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {user.business
-              ? `Como está ${user.business.name} nos próximos ${days} dias.`
-              : `Resumo dos próximos ${days} dias.`}
+            Sua agenda nos próximos {days} dias.
             {data ? (
               <span className="tabular-nums">
                 {" "}
@@ -133,21 +114,42 @@ export default function DashboardPage() {
         >
           <KpiCards kpis={data.kpis} days={data.range.days} />
 
+          {/* Os próximos atendimentos vêm antes de qualquer gráfico: o
+              colaborador abre isto para saber quem chega agora, não para
+              estudar a própria ocupação. */}
           <div className="mt-4 grid gap-4 lg:grid-cols-12">
             <Panel
-              title="Ocupação"
-              description={data.range.days === 7 ? "Dia a dia" : "Por semana"}
+              title="Seus próximos atendimentos"
+              description="Independente do período selecionado"
               className="lg:col-span-8"
+            >
+              <UpcomingList rows={data.upcoming} showEmployee={false} />
+            </Panel>
+
+            <Panel
+              title="Precisa de atenção"
+              description="O que trava a sua agenda"
+              className="lg:col-span-4"
+            >
+              <AlertsList alerts={data.alerts} />
+            </Panel>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-12">
+            <Panel
+              title="Sua ocupação"
+              description={data.range.days === 7 ? "Dia a dia" : "Por semana"}
+              className="lg:col-span-7"
             >
               <OccupancyChart buckets={data.occupancyByBucket} />
             </Panel>
 
             <Panel
-              title="Precisa de atenção"
-              description="O que trava a agenda agora"
-              className="lg:col-span-4"
+              title="Seus serviços mais reservados"
+              description="Por participação na receita"
+              className="lg:col-span-5"
             >
-              <AlertsList alerts={data.alerts} />
+              <ServiceRank rows={data.services} />
             </Panel>
           </div>
 
@@ -157,35 +159,6 @@ export default function DashboardPage() {
               description="Quando sua agenda enche, por dia da semana e hora"
             >
               <OccupancyHeatmap cells={data.heatmap} />
-            </Panel>
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-12">
-            <Panel
-              title="Equipe"
-              description={`Ocupação e receita de cada colaborador nos ${data.range.days} dias`}
-              className="lg:col-span-7"
-            >
-              <TeamTable rows={data.team} />
-            </Panel>
-
-            <Panel
-              title="Serviços mais reservados"
-              description="Por participação na receita"
-              className="lg:col-span-5"
-            >
-              <ServiceRank rows={data.services} />
-            </Panel>
-          </div>
-
-          <div className="mt-4 grid gap-4">
-            {/* Fora da janela do seletor de propósito: "próximos atendimentos"
-                é sempre o que vem agora, não o que cabe no período escolhido. */}
-            <Panel
-              title="Próximos atendimentos"
-              description="As reservas mais próximas, independente do período"
-            >
-              <UpcomingList rows={data.upcoming} />
             </Panel>
           </div>
         </div>

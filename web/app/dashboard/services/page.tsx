@@ -2,11 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  Add01Icon,
-  Delete02Icon,
-  PencilEdit02Icon,
-} from "@hugeicons/core-free-icons";
+import { Add01Icon, Scissor01Icon } from "@hugeicons/core-free-icons";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,22 +25,13 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { EmptyState } from "@/components/empty-state";
+import { formatPriceInput, parsePrice } from "@/lib/money";
 import { Service } from "@/lib/types";
 import { useAuthUser } from "../auth-context";
-
-const currency = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
+import { ServiceList } from "./service-list";
 
 export default function ServicesPage() {
   const user = useAuthUser();
@@ -100,7 +87,7 @@ export default function ServicesPage() {
     setEditing(service);
     setName(service.name);
     setDuration(String(service.duration));
-    setPrice(service.price);
+    setPrice(formatPriceInput(service.price));
     setFormError(null);
     setDialogOpen(true);
   }
@@ -108,9 +95,18 @@ export default function ServicesPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
+
+    // O campo é texto para aceitar vírgula, então a validação de formato é
+    // nossa — o browser não faz mais nada por ele.
+    const parsedPrice = parsePrice(price);
+    if (parsedPrice === null) {
+      setFormError("Informe um preço válido, como 45,90.");
+      return;
+    }
+
     setSubmitting(true);
 
-    const body = { name, duration: Number(duration), price: Number(price) };
+    const body = { name, duration: Number(duration), price: parsedPrice };
 
     try {
       if (editing) {
@@ -147,16 +143,25 @@ export default function ServicesPage() {
     }
   }
 
+  const orphans = services.filter(
+    (service) => service.employees.length === 0,
+  ).length;
+
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-7xl">
       {/* Empilha no celular: lado a lado, o botão espremeria o título. */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Serviços</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isAdmin
-              ? "Gerencie os serviços oferecidos pelo seu negócio."
-              : "Serviços oferecidos pelo negócio."}
+            {/* A contagem só entra depois do carregamento: "0 serviços"
+                enquanto a lista ainda vem seria mentira por meio segundo. */}
+            {loading || listError
+              ? isAdmin
+                ? "Gerencie os serviços oferecidos pelo seu negócio."
+                : "Serviços oferecidos pelo negócio."
+              : `${services.length} ${services.length === 1 ? "serviço" : "serviços"}` +
+                (orphans > 0 ? ` · ${orphans} sem profissional vinculado` : "")}
           </p>
         </div>
         {isAdmin && (
@@ -167,62 +172,45 @@ export default function ServicesPage() {
         )}
       </div>
 
-      <div className="mt-8 rounded-2xl border bg-card">
+      <div className="mt-8 overflow-hidden rounded-2xl border bg-card shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center p-12">
-            <Spinner />
+          // Skeleton no lugar do spinner: mesma linguagem de carregamento do
+          // dashboard, e já reserva a altura que a lista vai ocupar.
+          <div className="flex flex-col gap-3 p-4">
+            <Skeleton className="h-10 rounded-xl" />
+            <Skeleton className="h-10 rounded-xl" />
+            <Skeleton className="h-10 rounded-xl" />
           </div>
         ) : listError ? (
           <p className="p-12 text-center text-sm text-destructive">{listError}</p>
         ) : services.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted-foreground">
-            Nenhum serviço cadastrado ainda.
-          </p>
+          <EmptyState
+            icon={Scissor01Icon}
+            title="Nenhum serviço cadastrado ainda"
+            description={
+              isAdmin
+                ? "Cadastre o que o seu negócio oferece. Sem serviço, ninguém consegue reservar pela página pública."
+                : "O administrador ainda não cadastrou os serviços do negócio."
+            }
+            action={
+              isAdmin ? (
+                <Button size="sm" onClick={openCreate}>
+                  <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+                  Cadastrar serviço
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Duração</TableHead>
-                <TableHead>Preço</TableHead>
-                {isAdmin && <TableHead className="w-24" />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {services.map((service) => (
-                <TableRow key={service.id}>
-                  <TableCell className="font-medium">{service.name}</TableCell>
-                  <TableCell>{service.duration} min</TableCell>
-                  <TableCell>{currency.format(Number(service.price))}</TableCell>
-                  {isAdmin && (
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Editar ${service.name}`}
-                          onClick={() => openEdit(service)}
-                        >
-                          <HugeiconsIcon icon={PencilEdit02Icon} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Excluir ${service.name}`}
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeleting(service);
-                          }}
-                        >
-                          <HugeiconsIcon icon={Delete02Icon} />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <ServiceList
+            services={services}
+            isAdmin={isAdmin}
+            onEdit={openEdit}
+            onDelete={(service) => {
+              setDeleteError(null);
+              setDeleting(service);
+            }}
+          />
         )}
       </div>
 
@@ -261,13 +249,16 @@ export default function ServicesPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="service-price">Preço (R$)</FieldLabel>
+                {/* Texto, não number: o teclado pt-BR entrega vírgula e o
+                    type="number" a descarta em silêncio. inputMode mantém o
+                    teclado numérico no celular. */}
                 <Input
                   id="service-price"
-                  type="number"
-                  min={0}
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={price}
                   onChange={(event) => setPrice(event.target.value)}
+                  placeholder="45,90"
                   required
                 />
               </Field>
@@ -305,9 +296,12 @@ export default function ServicesPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir serviço</AlertDialogTitle>
+            {/* O servidor recusa excluir serviço que já tem reserva. Dizer
+                isso aqui evita que o erro só apareça depois do clique. */}
             <AlertDialogDescription>
-              Tem certeza que deseja excluir “{deleting?.name}”? Essa ação não
-              pode ser desfeita.
+              Tem certeza que deseja excluir “{deleting?.name}”? Ele sai da
+              página pública e dos vínculos da equipe, e a ação não pode ser
+              desfeita. Um serviço que já tem reservas não pode ser excluído.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteError && (

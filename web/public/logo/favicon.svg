@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 320 320" role="img" aria-label="Time Flow">
-  <circle cx="160" cy="160" r="160" fill="#4F39F6"/>
+  <circle cx="160" cy="160" r="160" fill="#4F39F6"></circle>
   <g fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round">
-    <circle cx="144" cy="160" r="76"/>
-    <path d="M144 112 L144 160"/>
-    <path d="M144 160 L250 160"/>
+    <circle cx="144" cy="160" r="76"></circle>
+    <path d="M144 112 L144 160"></path>
+    <path d="M144 160 L250 160"></path>
   </g>
 </svg>

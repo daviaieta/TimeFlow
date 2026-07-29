@@ -18,8 +18,16 @@ async function findOwnedService(businessId: number, id: number): Promise<Service
 }
 
 export const serviceService = {
-  listServices(businessId: number) {
-    return serviceRepository.findManyByBusiness(businessId);
+  // A tabela de junção não interessa a quem consome: sai daqui já achatada em
+  // `employees`, do mesmo formato que `GET /employees` usa para `services`.
+  async listServices(businessId: number) {
+    const services =
+      await serviceRepository.findManyByBusinessWithEmployees(businessId);
+
+    return services.map(({ employees, ...service }) => ({
+      ...service,
+      employees: employees.map((link) => link.employee),
+    }));
   },
 
   createService(businessId: number, input: ServiceInput) {

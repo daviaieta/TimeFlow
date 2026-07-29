@@ -98,7 +98,7 @@ export default function Home() {
       {/* Hero */}
       <section
         id="produto"
-        className="relative overflow-hidden scroll-mt-16 bg-gradient-to-b from-indigo-700 via-indigo-500 to-indigo-200 pb-24"
+        className="relative overflow-hidden scroll-mt-16 bg-gradient-to-b from-indigo-700 via-indigo-500 to-indigo-200 pb-24 dark:from-indigo-900 dark:via-indigo-800 dark:to-background"
       >
         <div className="mx-auto flex max-w-3xl flex-col items-center px-6 pt-20 text-center sm:pt-28">
           <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-6xl">
@@ -110,13 +110,21 @@ export default function Home() {
             Uma página de agendamento para o seu negócio. O cliente escolhe o
             serviço, o profissional e o horário — sem ligação, sem WhatsApp.
           </p>
-          <a
-            href="#recursos"
-            className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-indigo-950 shadow-lg transition-all hover:bg-indigo-50 active:translate-y-px"
-          >
-            Conheça o produto
-            <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
-          </a>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="#recursos"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-indigo-950 shadow-lg transition-all hover:bg-indigo-50 active:translate-y-px"
+            >
+              Conheça o produto
+              <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
+            </a>
+            <Link
+              href="/contato"
+              className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-white ring-1 ring-white/50 transition-all hover:bg-white/10 hover:ring-white active:translate-y-px"
+            >
+              Fale comigo
+            </Link>
+          </div>
         </div>
 
         {/* Mockup da client view */}
@@ -309,23 +317,6 @@ export default function Home() {
               </div>
             ))}
           </div>
-
-          <div className="mx-auto mt-16 max-w-2xl rounded-2xl bg-indigo-950 px-6 py-10 text-center text-white">
-            <h3 className="text-2xl font-semibold tracking-tight">
-              Ainda em dúvida sobre qual plano?
-            </h3>
-            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-indigo-100">
-              Me conte como sua agenda funciona hoje. Respondo em até 1 dia útil,
-              dizendo se o Time Flow resolve o seu caso.
-            </p>
-            <Link
-              href="/contato"
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-indigo-950 transition-colors hover:bg-indigo-50"
-            >
-              Falar com quem fez o produto
-              <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
-            </Link>
-          </div>
         </div>
       </section>
 
@@ -342,7 +333,7 @@ export default function Home() {
           <div className="flex flex-col items-center gap-3 sm:flex-row">
             <a
               href="#"
-              className="bg-indigo-600 inline-flex items-center gap-2 rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-opacity hover:opacity-85"
+              className="inline-flex items-center gap-2 rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-opacity hover:opacity-85"
             >
               Falar com a gente
               <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />

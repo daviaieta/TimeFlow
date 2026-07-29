@@ -15,6 +15,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchAdapter } from "@/adapters/fetchAdapter";
 import { AuthUser, Role, clearToken, getToken } from "@/lib/auth";
 import { formatBusinessName } from "@/lib/businessName";
@@ -193,10 +194,13 @@ export default function DashboardLayout({
             ) : (
               <p className="truncate text-sm font-medium">Plataforma</p>
             )}
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <HugeiconsIcon icon={Logout03Icon} data-icon="inline-start" />
-              Sair
-            </Button>
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
+                <HugeiconsIcon icon={Logout03Icon} data-icon="inline-start" />
+                Sair
+              </Button>
+            </div>
           </header>
 
           {/* pb-24 no mobile: a barra de navegação é fixa e cobriria o fim da

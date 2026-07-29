@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
@@ -15,12 +16,15 @@ export default function LoginPage() {
           <Link href="/" className="flex items-center">
             <Logo />
           </Link>
-          <Link
-            href="/"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Voltar ao site
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Voltar ao site
+            </Link>
+            <ThemeToggle />
+          </div>
         </header>
 
         <main className="flex flex-1 items-center">
