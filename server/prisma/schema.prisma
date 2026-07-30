@@ -66,6 +66,16 @@ model Business {
   users    User[]
   services Service[]
   bookings Booking[]
+
+  // CRM. Tudo aqui é dado DESTE negócio sobre um cliente — nenhuma destas
+  // relações atravessa para outro tenant.
+  customerProfiles CustomerProfile[]
+  customerNotes    CustomerNote[]
+  customerTags     CustomerTag[]
+  loyaltyEntries   LoyaltyEntry[]
+  verifications    CustomerVerification[]
+  mergeLogs        CustomerMergeLog[]
+  crmSettings      BusinessCrmSettings?
 }
 
 model User {
@@ -80,8 +90,8 @@ model User {
   // Mesma razão do logoKey do Business: guarda a key, não a URL.
   avatarKey String?
 
-  inviteToken           String?   @unique
-  inviteTokenExpiresAt  DateTime?
+  inviteToken          String?   @unique
+  inviteTokenExpiresAt DateTime?
 
   // Guardado como hash SHA-256, ao contrário do inviteToken: o link de
   // recuperação vale por si só para tomar a conta, então um vazamento de
@@ -95,6 +105,12 @@ model User {
 
   availabilities Availability[]
   services       EmployeeService[]
+
+  // Autoria no CRM: quem escreveu a nota, quem ajustou os pontos à mão, quem
+  // mandou fundir duas identidades.
+  customerNotes     CustomerNote[]
+  loyaltyEntries    LoyaltyEntry[]
+  customerMergeLogs CustomerMergeLog[]
 }
 
 model Service {
@@ -175,9 +191,26 @@ model Booking {
   business   Business? @relation(fields: [businessId], references: [id])
   businessId Int?
 
-  availabilities Availability[]
+  // Nulo em toda reserva anterior ao CRM e em todo convidado que não deixou
+  // canal de contato nenhum. As colunas client* acima continuam sendo o
+  // registro imutável do que o cliente digitou NA HORA: corrigir o cadastro
+  // depois não pode reescrever a história, e a conferência do gasto depende
+  // desse retrato.
+  profile   CustomerProfile? @relation(fields: [profileId], references: [id])
+  profileId Int?
 
+  // Chave de deduplicação vinda do cliente. Um toque duplo em conexão ruim
+  // não pode virar duas reservas — nem dois créditos de fidelidade.
+  idempotencyKey String?
+
+  availabilities Availability[]
+  loyaltyEntries LoyaltyEntry[]
+
+  // NULLs são distintos no Postgres, então as reservas que não mandam chave
+  // (todas as antigas, e todo cliente que não usa o recurso) não brigam entre si.
+  @@unique([businessId, idempotencyKey])
   @@index([businessId, createdAt(sort: Desc)])
+  @@index([profileId, createdAt(sort: Desc)])
 }
 
 // Mensagens do formulário público da landing. Sem relação com Business: quem
@@ -196,4 +229,448 @@ model ContactMessage {
   updatedAt    DateTime      @updatedAt
 
   @@index([status, createdAt])
+}
+
+// ===========================================================================
+// CRM — docs/2026-07-30-crm-architecture.md
+//
+// Duas camadas, e a fronteira entre elas é a promessa do produto:
+//
+//   Customer         identidade global. Credenciais, canais verificados, nome.
+//                    Compartilhada entre negócios.
+//   CustomerProfile  o prontuário DESTE negócio sobre essa pessoa. Notas,
+//                    fidelidade, gasto, contadores. Nunca compartilhado.
+//
+// Existe UMA aresta da camada global para a de tenant (Customer ->
+// CustomerProfile) e ela é percorrida numa direção só em tempo de execução:
+// código de negócio começa no businessId e nunca sobe para descobrir onde
+// mais o cliente é atendido.
+// ===========================================================================
+
+enum CustomerIdentityState {
+  // Criado pelo backfill ou por uma reserva de convidado. Sem credenciais,
+  // não faz login. Existe para o negócio ter prontuário de quem ele só
+  // conhece pelo telefone.
+  PROVISIONAL
+  // Tem credencial e pelo menos um canal verificado.
+  ACTIVE
+  // Trava de suporte ou do próprio cliente. Bloqueia login, não esconde
+  // histórico de ninguém.
+  SUSPENDED
+  // Direito ao esquecimento aplicado: PII apagada, linha mantida para as
+  // chaves estrangeiras continuarem resolvendo.
+  ERASED
+}
+
+enum CustomerProfileStatus {
+  ACTIVE
+  // Este negócio não aceita mais reserva dessa pessoa. Decisão local: não
+  // vale nos outros.
+  BLOCKED
+}
+
+enum VerificationChannel {
+  EMAIL
+  PHONE
+}
+
+enum VerificationPurpose {
+  SIGNUP
+  LOGIN
+  ADD_CHANNEL
+  CLAIM_HISTORY
+  PASSWORD_RESET
+}
+
+enum LoyaltyEntryKind {
+  // Crédito automático de uma reserva concluída.
+  EARN
+  // Resgate.
+  REDEEM
+  // Correção manual da equipe. Sempre com autor e motivo.
+  ADJUST
+  // Pontos invalidados por política de expiração.
+  EXPIRE
+}
+
+enum CustomerLinkSource {
+  PUBLIC_BOOKING
+  STAFF
+  MIGRATION
+  CLAIM
+}
+
+enum CustomerMergeActor {
+  // Fluxo de claim: o próprio cliente provou que o histórico é dele.
+  CUSTOMER
+  // Suporte ou admin resolvendo duplicata à mão.
+  STAFF
+  // Job de migração.
+  SYSTEM
+}
+
+// A pessoa. Uma linha por ser humano na plataforma inteira. Não guarda dado
+// de negócio nenhum — isso é trabalho do CustomerProfile.
+model Customer {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Identificador para o portal do cliente. O id inteiro nunca sai do
+  // servidor: é adivinhável e entregaria a contagem de clientes da
+  // plataforma. Default no BANCO (e não `uuid()` do Prisma) para que todo
+  // caminho de inserção receba um — inclusive o backfill, que pode ser SQL
+  // puro por volume.
+  publicId String @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  state CustomerIdentityState @default(PROVISIONAL)
+
+  // Nome global. O apelido por negócio mora no CustomerProfile, então mudar
+  // este aqui nunca reescreve o que um negócio já sabe.
+  name String
+
+  // Nulo porque uma linha PROVISIONAL criada de um cliente de balcão só tem
+  // telefone. Único globalmente: uma identidade e só uma reivindica um
+  // endereço. Estar preenchido NÃO significa verificado — quem diz isso é
+  // emailVerifiedAt, e só canal verificado participa de vínculo entre
+  // negócios (a razão está no §11.1 do documento: com e-mail não verificado
+  // valendo como identidade, registrar o e-mail da vítima e nunca confirmar
+  // vira sequestro de conta).
+  email           String?   @unique
+  emailVerifiedAt DateTime?
+
+  // E.164, normalizado na escrita. Mesma separação entre reivindicar e
+  // verificar do e-mail.
+  phoneE164       String?   @unique
+  phoneVerifiedAt DateTime?
+
+  // Nulo em identidade PROVISIONAL: ela não faz login por construção.
+  passwordHash String?
+
+  // Incrementado em troca de senha, revogação, fusão e apagamento. Token de
+  // acesso com valor menor é recusado sem ir ao banco buscar a sessão — é
+  // isso que torna seguro um access token curto e sem estado.
+  tokenVersion Int @default(0)
+
+  // Preenchido quando esta linha foi fundida em outra. Mantida em vez de
+  // apagada para que refresh tokens antigos e linhas de auditoria ainda
+  // resolvam.
+  mergedIntoId Int?
+  mergedInto   Customer?  @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Customer[] @relation("CustomerMerge")
+
+  lastLoginAt DateTime?
+
+  profiles      CustomerProfile[]
+  sessions      CustomerSession[]
+  verifications CustomerVerification[]
+  mergesWon     CustomerMergeLog[]     @relation("MergeWinner")
+  mergesLost    CustomerMergeLog[]     @relation("MergeLoser")
+
+  @@index([state])
+  @@index([mergedIntoId])
+}
+
+// Família de refresh token de um dispositivo. O token em si nunca é gravado.
+model CustomerSession {
+  // BigInt de nascença: a rotação escreve uma linha por renovação, o que dá
+  // ~5e8 linhas/ano na escala alvo e estoura int4 em uns quatro anos. Dá para
+  // ser BigInt aqui justamente porque este id nunca cruza o fio — a API
+  // endereça sessão por publicId, então nenhum DTO precisa serializar bigint
+  // (JSON.stringify não sabe).
+  id        BigInt   @id @default(autoincrement())
+  publicId  String   @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now())
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId Int
+
+  // SHA-256 do refresh token, mesma razão do passwordResetTokenHash do User:
+  // o valor cru é credencial por si só, então um vazamento de banco não pode
+  // entregar tokens utilizáveis.
+  refreshTokenHash String   @unique
+  expiresAt        DateTime
+
+  // Corrente de rotação. Ao renovar, a linha antiga é revogada e a nova
+  // aponta para ela: reapresentar um token já rotacionado é detectável e
+  // derruba a família inteira.
+  replacedById BigInt?          @unique
+  replacedBy   CustomerSession? @relation("SessionRotation", fields: [replacedById], references: [id])
+  replaces     CustomerSession? @relation("SessionRotation")
+
+  revokedAt DateTime?
+
+  // Atribuição grosseira de dispositivo para a tela "suas sessões":
+  // user-agent truncado e IP mascarado em /24. O suficiente para reconhecer
+  // um aparelho, não um log de rastreamento.
+  userAgent String?
+  ipPrefix  String?
+
+  @@index([customerId, revokedAt])
+  @@index([expiresAt])
+}
+
+// Códigos de uso único: verificação de e-mail, OTP de telefone, magic link,
+// recuperação de senha, reivindicação de histórico.
+model CustomerVerification {
+  // BigInt pela mesma razão de churn da sessão, e seguro pela mesma razão:
+  // ninguém endereça uma verificação por id de fora — apresenta-se o código,
+  // que é buscado pelo hash.
+  id        BigInt   @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId Int
+
+  channel VerificationChannel
+  purpose VerificationPurpose
+
+  // O destino para onde o código FOI enviado, capturado no envio. Necessário
+  // porque o cliente pode trocar o e-mail antes de resgatar, e um código só
+  // pode validar o destino que ele realmente visitou.
+  destination String
+
+  // SHA-256 do código. Um OTP de 6 dígitos tem 20 bits, então o hash é
+  // defesa em profundidade, não o controle principal — quem segura são as
+  // tentativas e a expiração.
+  codeHash String
+
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+
+  // Preenchido só em CLAIM_HISTORY: de qual negócio este código destrava o
+  // histórico de convidado. Nulo em todos os outros propósitos.
+  business   Business? @relation(fields: [businessId], references: [id])
+  businessId Int?
+
+  @@index([customerId, purpose, consumedAt])
+  @@index([expiresAt])
+}
+
+// O prontuário: esta pessoa, neste negócio. Todo dado de cliente que um
+// negócio possui pendura aqui. É esta a linha que a trava de tenant confere,
+// e o único objeto em forma de cliente que o painel enxerga.
+model CustomerProfile {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // O que o painel e a API de negócio usam como id do cliente.
+  // Deliberadamente não é o Customer.id: se dois negócios recebessem o id
+  // global, poderiam comparar listas e descobrir clientes em comum — que é
+  // exatamente a correlação que prometemos não existir.
+  publicId String @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId Int
+
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  source CustomerLinkSource
+  status CustomerProfileStatus @default(ACTIVE)
+
+  // Nome/telefone/e-mail como ESTE negócio conhece. Copiados do Customer no
+  // vínculo, editáveis pela equipe, nunca sobrescritos por mudança global.
+  // É isto que faz "negócios não compartilham histórico" valer também para a
+  // PII: renomear-se na Barber Prime não renomeia ninguém na Old Brothers.
+  displayName  String
+  displayPhone String?
+  displayEmail String?
+
+  // Agregados em cache. A fonte de verdade é Booking / LoyaltyEntry; estes
+  // são mantidos na MESMA transação do evento que os muda e são
+  // rederiváveis por job de conferência. Uma tela de cliente que faça
+  // count(*) e sum(price) funciona com 200 reservas e para de funcionar
+  // quando a lista mostra 50 clientes de uma vez.
+  bookingsCount    Int       @default(0)
+  completedCount   Int       @default(0)
+  noShowCount      Int       @default(0)
+  canceledCount    Int       @default(0)
+  totalSpent       Decimal   @default(0) @db.Decimal(12, 2)
+  // Verdadeiro quando alguma reserva que soma no totalSpent é anterior à
+  // fase 0 e portanto não tem priceAtBooking. Guardado em vez de derivado:
+  // senão toda consulta de relatório teria que reperguntar "existe snapshot
+  // nulo aqui?", e a interface não conseguiria rotular o número com
+  // honestidade.
+  spendIsEstimated Boolean   @default(false)
+  loyaltyPoints    Int       @default(0)
+  firstBookedAt    DateTime?
+  lastBookedAt     DateTime?
+
+  bookings Booking[]
+  notes    CustomerNote[]
+  loyalty  LoyaltyEntry[]
+  tags     CustomerProfileTag[]
+
+  // Um prontuário por pessoa por negócio. É a invariante anti-duplicata, e
+  // ela é do banco — não uma checagem de service que alguém esquece de
+  // chamar. Também é o que absorve a corrida de duas primeiras reservas
+  // simultâneas: a perdedora repete o upsert em vez de duplicar.
+  @@unique([customerId, businessId])
+  // Lista padrão do painel: mais recentes primeiro.
+  @@index([businessId, lastBookedAt(sort: Desc)])
+  // Lista filtrada e alfabética; cobre também busca por prefixo do nome.
+  @@index([businessId, status, displayName])
+  // Métrica "clientes novos no mês".
+  @@index([businessId, createdAt])
+}
+
+// Nota livre da equipe. Escopada por tenant por construção: o businessId
+// mora AQUI, não é inferido pelo prontuário, para a trava ser um predicado só.
+model CustomerNote {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile   CustomerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId Int
+
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  // Nulo de propósito: o autor pode ser desligado do negócio e a nota
+  // continua sendo registro da casa.
+  author   User? @relation(fields: [authorId], references: [id])
+  authorId Int?
+
+  body String @db.Text
+
+  // Nota nunca é mostrada ao cliente. A coluna existe explícita mesmo assim,
+  // para que um recurso futuro de "compartilhar com o cliente" não possa
+  // vazar o acervo existente só mudando uma consulta. Salão e consultório
+  // escrevem informação de saúde aqui.
+  visibleToCustomer Boolean @default(false)
+
+  @@index([profileId, createdAt(sort: Desc)])
+  @@index([businessId, createdAt(sort: Desc)])
+}
+
+// Vocabulário de etiquetas, de um negócio só. "VIP" na Old Brothers e "VIP"
+// na Barber Prime são linhas diferentes, e têm que ser.
+model CustomerTag {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  name  String
+  // Hex, validado na camada de regra. Só apresentação.
+  color String?
+
+  profiles CustomerProfileTag[]
+
+  @@unique([businessId, name])
+}
+
+model CustomerProfileTag {
+  profile   CustomerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId Int
+
+  tag   CustomerTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId Int
+
+  createdAt DateTime @default(now())
+
+  @@id([profileId, tagId])
+  @@index([tagId])
+}
+
+// Livro de pontos, só de acréscimo. O saldo é uma soma em cache no
+// CustomerProfile; esta tabela é a trilha de auditoria e o que resolve uma
+// disputa. Linha nunca é alterada nem apagada — erro se corrige com ADJUST.
+model LoyaltyEntry {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  profile   CustomerProfile @relation(fields: [profileId], references: [id])
+  profileId Int
+
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  kind   LoyaltyEntryKind
+  // Com sinal. EARN/ADJUST positivo ou negativo, REDEEM/EXPIRE negativo.
+  // Inteiro: ponto de fidelidade fracionado é ticket de suporte, não recurso.
+  points Int
+
+  // A reserva que gerou o crédito, quando existe uma.
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+  bookingId Int?
+
+  // Obrigatório em ADJUST pela camada de regra; livre nos outros.
+  reason String?
+
+  author   User? @relation(fields: [authorId], references: [id])
+  authorId Int?
+
+  // Torna o crédito idempotente: retry de webhook ou duplo clique em
+  // "concluir atendimento" não podem premiar duas vezes.
+  idempotencyKey String?
+
+  @@unique([businessId, idempotencyKey])
+  @@index([profileId, createdAt(sort: Desc)])
+  @@index([businessId, kind, createdAt])
+}
+
+// Trilha da única operação destrutiva do CRM: fundir duas identidades.
+// Obrigatória — sem ela um bug de fusão é irrecuperável. Só de acréscimo, e
+// isso é garantido por trigger no banco (ver a migration), não por combinado:
+// a camada de repositório não expõe update nem delete, mas quem protege o
+// registro de auditoria de um bug futuro é o banco.
+//
+// Uma linha por (fusão, negócio) afetado: a fusão percorre os prontuários do
+// perdedor um negócio por vez, e é por negócio que o suporte precisa saber o
+// que se moveu.
+model CustomerMergeLog {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  winner   Customer @relation("MergeWinner", fields: [winnerId], references: [id])
+  winnerId Int
+
+  loser   Customer @relation("MergeLoser", fields: [loserId], references: [id])
+  loserId Int
+
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  // Contagens em colunas explícitas, não num JSON: o suporte precisa
+  // filtrar e somar isso, e um blob viraria schema não declarado.
+  movedBookings     Int     @default(0)
+  movedNotes        Int     @default(0)
+  movedLoyalty      Int     @default(0)
+  // Verdadeiro quando o vencedor JÁ tinha prontuário neste negócio e os dois
+  // tiveram que ser colapsados em um — o caso realmente destrutivo, em que o
+  // prontuário do perdedor deixou de existir.
+  profilesCollapsed Boolean @default(false)
+
+  actor       CustomerMergeActor
+  // Preenchido só quando actor = STAFF.
+  actorUser   User?              @relation(fields: [actorUserId], references: [id])
+  actorUserId Int?
+
+  @@index([winnerId, createdAt(sort: Desc)])
+  @@index([loserId])
+  @@index([businessId, createdAt(sort: Desc)])
+}
+
+// Ajustes de CRM por negócio. Linha separada em vez de mais colunas no
+// Business: o CRM é opcional e a configuração dele só cresce.
+model BusinessCrmSettings {
+  businessId Int      @id
+  business   Business @relation(fields: [businessId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loyaltyEnabled        Boolean @default(false)
+  // Pontos por unidade inteira de moeda de uma reserva concluída.
+  pointsPerUnit         Int     @default(1)
+  // Nulo = ponto não expira.
+  pointsExpireAfterDays Int?
+  // Se a página pública oferece "entrar para reservar mais rápido".
+  customerLoginEnabled  Boolean @default(true)
 }

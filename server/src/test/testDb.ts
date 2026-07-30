@@ -101,12 +101,32 @@ export async function ensureTestSchema(): Promise<void> {
 }
 
 // Ordem ditada pelas foreign keys: Availability aponta para Booking, Booking
-// aponta para Service, e Service/User apontam para Business.
+// aponta para Service e para CustomerProfile, e Service/User apontam para
+// Business. Errar a ordem aqui não falha aqui — falha em testes sem relação
+// nenhuma, no reset seguinte.
 export async function resetDatabase(): Promise<void> {
   assertTestSchema();
 
+  // CRM primeiro: folhas antes dos troncos.
+  await testPrisma.customerProfileTag.deleteMany();
+  await testPrisma.customerNote.deleteMany();
+  await testPrisma.loyaltyEntry.deleteMany();
+
+  // TRUNCATE e não deleteMany: o gatilho de somente-acréscimo recusa DELETE
+  // nesta tabela, e TRUNCATE não dispara gatilho de linha. É de propósito que
+  // a trava valha para a aplicação e não para o reset dos testes.
+  // Nome do schema é constante do módulo, não entrada de ninguém.
+  await testPrisma.$executeRawUnsafe(`TRUNCATE TABLE "${TEST_SCHEMA}"."CustomerMergeLog"`);
+
   await testPrisma.availability.deleteMany();
   await testPrisma.booking.deleteMany();
+  await testPrisma.customerTag.deleteMany();
+  await testPrisma.customerProfile.deleteMany();
+  await testPrisma.customerSession.deleteMany();
+  await testPrisma.customerVerification.deleteMany();
+  await testPrisma.customer.deleteMany();
+  await testPrisma.businessCrmSettings.deleteMany();
+
   await testPrisma.employeeService.deleteMany();
   await testPrisma.service.deleteMany();
   await testPrisma.user.deleteMany();

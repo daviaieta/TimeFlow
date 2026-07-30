@@ -99,6 +99,18 @@ enum CustomerLinkSource {
   /// Customer explicitly claimed pre-existing guest history.
   CLAIM
 }
+
+/// Who caused a merge. Added during phase 1: §4.3 specified an "actor" without
+/// saying what shape it takes, and the three triggers of a merge are genuinely
+/// different parties.
+enum CustomerMergeActor {
+  /// Claim flow — the customer proved the history is theirs.
+  CUSTOMER
+  /// Support or an admin resolving a duplicate by hand.
+  STAFF
+  /// Migration job.
+  SYSTEM
+}
 ```
 
 ### 2.2 Global identity
@@ -114,7 +126,11 @@ model Customer {
   /// Opaque handle for the customer-facing portal. The integer id never
   /// leaves the server: it is guessable and would let anyone enumerate the
   /// platform's customer count.
-  publicId String @unique @default(uuid())
+  /// Defaulted in the DATABASE rather than by Prisma's `uuid()`, so that every
+  /// insertion path gets one — including the phase 3 backfill, which may have
+  /// to be raw SQL at volume. Also 16 bytes instead of 36, which matters on a
+  /// unique index over tens of millions of rows.
+  publicId String @db.Uuid @unique @default(dbgenerated("gen_random_uuid()"))
 
   state CustomerIdentityState @default(PROVISIONAL)
 
@@ -168,7 +184,7 @@ model CustomerSession {
   /// the wire: the API addresses sessions by publicId, so no DTO ever has to
   /// serialize a bigint.
   id        BigInt   @id @default(autoincrement())
-  publicId  String   @unique @default(uuid())
+  publicId  String   @db.Uuid @unique @default(dbgenerated("gen_random_uuid()"))
   createdAt DateTime @default(now())
 
   customer   Customer @relation(fields: [customerId], references: [id])
@@ -252,7 +268,7 @@ model CustomerProfile {
   /// Deliberately not Customer.id: if two businesses both received the global
   /// id they could compare notes and discover shared clients, which is
   /// exactly the correlation we promise does not happen.
-  publicId String @unique @default(uuid())
+  publicId String @db.Uuid @unique @default(dbgenerated("gen_random_uuid()"))
 
   customer   Customer @relation(fields: [customerId], references: [id])
   customerId Int
@@ -399,7 +415,49 @@ model LoyaltyEntry {
   @@index([profileId, createdAt(sort: Desc)])
   @@index([businessId, kind, createdAt])
 }
+
+/// Audit trail of the only destructive operation in the CRM. Specified in §4.3
+/// and required by §11.10; the Prisma model was missing from this section and
+/// was written in phase 1.
+///
+/// One row per (merge, business) pair: the merge walks the loser's profiles one
+/// business at a time, and per-business is the granularity support needs.
+model CustomerMergeLog {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  winner   Customer @relation("MergeWinner", fields: [winnerId], references: [id])
+  winnerId Int
+
+  loser   Customer @relation("MergeLoser", fields: [loserId], references: [id])
+  loserId Int
+
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  /// §4.3 said "movedCounts" without fixing a representation. Explicit columns
+  /// rather than Json: support filters and sums these, and a blob would be an
+  /// undeclared schema inside a declared one.
+  movedBookings Int @default(0)
+  movedNotes    Int @default(0)
+  movedLoyalty  Int @default(0)
+  /// True when the winner ALREADY had a profile at this business and the two had
+  /// to be collapsed into one — the genuinely destructive case, where the
+  /// loser's profile stopped existing.
+  profilesCollapsed Boolean @default(false)
+
+  actor CustomerMergeActor
+  /// Set only when actor = STAFF.
+  actorUser   User? @relation(fields: [actorUserId], references: [id])
+  actorUserId Int?
+
+  @@index([winnerId, createdAt(sort: Desc)])
+  @@index([loserId])
+  @@index([businessId, createdAt(sort: Desc)])
+}
 ```
+
+**Append-only is enforced by the database, not by convention.** A `BEFORE UPDATE OR DELETE ... FOR EACH ROW` trigger on `CustomerMergeLog` raises `restrict_violation`. The repository layer also exposes no update or delete method, but a merge bug is unrecoverable without this log (§11.10), so the guarantee cannot rest on a future contributor remembering the rule. Two implementation notes: the trigger is deliberately row-level, because `TRUNCATE` does not fire row-level triggers and `TRUNCATE` is how the integration suite resets that table — the lock protects against application bugs without making the harness untestable. And Prisma manages neither functions nor triggers, so this produces no schema drift and survives later migrations (verified: `prisma migrate diff` reports an empty migration after applying it).
 
 ### 2.4 Additive changes to existing models
 
@@ -492,6 +550,9 @@ erDiagram
   CustomerProfile ||--o{ CustomerProfileTag : ""
   CustomerTag ||--o{ CustomerProfileTag : ""
   Business ||--o{ CustomerTag : "owns vocabulary"
+
+  Customer ||--o{ CustomerMergeLog : "won / lost a merge"
+  Business ||--o{ CustomerMergeLog : "scope of the merge"
 
   CustomerProfile ||--o{ Booking : "history at this business"
   Business ||--o{ Booking : "denormalized tenant key"
@@ -680,9 +741,11 @@ Add nullable column + FK + `@@index([businessId, createdAt])`. Backfill `UPDATE 
 
 > Migration `20260730050756_add_business_id_and_price_to_booking`, hand-written for the backfill. Also added `Booking.priceAtBooking` (decision 2, approved). Index created with `IF NOT EXISTS` so that at production volume it can be pre-created `CONCURRENTLY` out-of-band and this step becomes a no-op — Prisma wraps each migration file in a transaction, and `CREATE INDEX CONCURRENTLY` cannot run inside one. Verified on the development database: 177 bookings, 177 with a tenant key, 0 divergent from `Service.businessId`. `priceAtBooking` is intentionally *not* backfilled — a value copied from today's `Service.price` would be indistinguishable from a real snapshot, so null is the honest answer. Tests: 3 added (tenant + price on the public path, on the internal path, and a price-increase test proving the snapshot does not follow the reajuste). Suite after: 165 unit, 54 integration, all passing.
 
-**Phase 1 — tables only.**
+**Phase 1 — tables only. — SHIPPED 2026-07-30**
 All new models, no writes, no routes. Deploy is a pure DDL migration. Verifies index creation cost and migration duration against production-size data.
 *Rollback:* drop tables.
+
+> Migration `20260730051747_add_crm_schema`: 6 enums + `CustomerMergeActor`, 9 tables, 27 indexes, and three nullable columns on `Booking` (`profileId`, `idempotencyKey`, plus `@@unique([businessId, idempotencyKey])` — NULLs are distinct in Postgres, so the 177 existing rows cannot collide). Generated with `prisma migrate diff` and hand-edited to append the `CustomerMergeLog` append-only trigger. `resetDatabase` in `src/test/testDb.ts` learned the new FK order, and uses `TRUNCATE` for the merge log. Tests: 7 added, all database-level invariants (one profile per customer per business; the same customer holding independent profiles at two businesses; DB-side `publicId` defaults reaching even raw-SQL inserts; merge log rejecting UPDATE and DELETE; per-tenant `idempotencyKey` with coexisting NULLs; notes and loyalty entries carrying their own `businessId`). Suite after: 165 unit, 61 integration, all passing. No drift.
 
 **Phase 2 — dual write on the booking path.**
 Public and internal booking start resolving/creating customers and profiles behind a `CRM_ENABLED` flag (same pattern as the existing `BILLING_ENABLED`). `Booking.client*` continue to be written unconditionally and remain authoritative for display. Nothing reads the CRM yet.
@@ -808,7 +871,7 @@ Auth plumbing: the portal uses the refresh cookie + in-memory access token; the 
 
 **11.9 Do not conflate Stripe customers.** `Business.stripeCustomerId` is the tenant. If per-customer payments arrive later, they need their own field on `CustomerProfile` (payments are tenant-scoped — the business is the merchant), never on `Customer`.
 
-**11.10 Merge is destructive; log it.** `CustomerMergeLog` is append-only and mandatory. Support will need it, and a merge bug without it is unrecoverable.
+**11.10 Merge is destructive; log it.** `CustomerMergeLog` is append-only and mandatory. Support will need it, and a merge bug without it is unrecoverable. Append-only is enforced by a database trigger, not by convention — see the note under §2.3.
 
 **11.11 Verification codes scoped to destination.** `CustomerVerification.destination` is captured at send time and re-checked at redeem, so changing the email between send and redeem cannot verify the new address with the old code.
 
@@ -845,6 +908,11 @@ Existing indexes are untouched. New ones, with the reason each exists — an ind
 - `(profileId, createdAt DESC)` — ledger view.
 - `(businessId, kind, createdAt)` — accrual/redemption reporting.
 - `(businessId, idempotencyKey)` unique — no double awards.
+
+**`CustomerMergeLog`**
+- `(winnerId, createdAt DESC)` — "what was merged into this identity", the support question.
+- `(loserId)` — following a vanished identity forward.
+- `(businessId, createdAt DESC)` — per-tenant audit.
 
 **`CustomerSession`**
 - `refreshTokenHash` unique — the refresh hot path, one index hit.
