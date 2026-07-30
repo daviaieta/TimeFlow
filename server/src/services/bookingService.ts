@@ -73,9 +73,14 @@ export async function createBookingForBusiness(
     run.map((slotInRun) => slotInRun.id),
     {
       serviceId: service.id,
+      // O `businessId` já foi validado contra o serviço e contra o slot logo
+      // acima; passar o parâmetro em vez de `service.businessId` mantém uma
+      // única fonte de verdade para o tenant nesta função.
+      businessId,
       clientName,
       clientPhone: input.clientPhone.trim(),
       clientEmail: input.clientEmail?.trim() || null,
+      priceAtBooking: service.price,
       source,
     },
   );

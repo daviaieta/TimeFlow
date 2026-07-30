@@ -65,6 +65,7 @@ model Business {
 
   users    User[]
   services Service[]
+  bookings Booking[]
 }
 
 model User {
@@ -154,10 +155,29 @@ model Booking {
   // nenhum caminho de criação depende do default.
   source BookingSource @default(ONLINE)
 
+  // Preço do serviço no instante da reserva. Sem esta coluna, "quanto este
+  // cliente já gastou aqui" só poderia ser somado a partir de Service.price,
+  // que é o preço de HOJE — a métrica se reescreveria sozinha a cada reajuste.
+  // Nulo apenas nas reservas anteriores a esta migration: para elas o gasto
+  // continua sendo estimativa, e o CRM rotula como tal.
+  priceAtBooking Decimal? @db.Decimal(10, 2)
+
   service   Service @relation(fields: [serviceId], references: [id])
   serviceId Int
 
+  // Chave de tenant desnormalizada. Antes o negócio de uma reserva só era
+  // alcançável via Service.businessId, e uma coluna de OUTRA tabela não entra
+  // num índice composto com a data — toda listagem por negócio pagava o join.
+  // É também a única forma de particionar esta tabela por tenant mais adiante:
+  // não se particiona por uma coluna que não existe.
+  // Nula só até o backfill desta migration ser conferido; vira NOT NULL na
+  // fase de contract, quando nada mais depende do join antigo.
+  business   Business? @relation(fields: [businessId], references: [id])
+  businessId Int?
+
   availabilities Availability[]
+
+  @@index([businessId, createdAt(sort: Desc)])
 }
 
 // Mensagens do formulário público da landing. Sem relação com Business: quem

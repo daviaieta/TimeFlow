@@ -36,12 +36,14 @@ function bookingPayload(availabilityId: number, serviceId: number, clientName: s
 // às vezes barra a segunda requisição antes dela chegar na transação — e um
 // teste que só exercita o pre-check não prova nada sobre o claim.
 test("claim atômico: duas transações no mesmo slot, só uma cria a reserva", async () => {
-  const { service, slots } = await seedBookableBusiness("claim-direto");
+  const { business, service, slots } = await seedBookableBusiness("claim-direto");
 
   const data = {
     serviceId: service.id,
+    businessId: business.id,
     clientPhone: "11999998888",
     clientEmail: null,
+    priceAtBooking: service.price,
     source: BookingSource.ONLINE,
   };
 
@@ -162,6 +164,79 @@ test("reserva interna e reserva pública disputando o mesmo slot", async () => {
 
   assert.deepEqual([publicResponse.statusCode, internalResponse.statusCode].sort(), [201, 409]);
   assert.equal((await testPrisma.booking.findMany()).length, 1);
+});
+
+// Fase 0 do CRM: a reserva grava o próprio tenant. O que o teste tranca é a
+// invariante que o backfill garantiu para o passado e o código tem que manter
+// no futuro — Booking.businessId é SEMPRE o businessId do serviço reservado.
+// Se um caminho de criação esquecer a coluna, toda listagem por negócio e todo
+// particionamento futuro passam a mentir por omissão.
+test("reserva pública grava o tenant e o preço do momento", async () => {
+  const { business, service, slots } = await seedBookableBusiness("tenant-publico");
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/public/businesses/${business.slug}/bookings`,
+    payload: bookingPayload(slots[0].id, service.id, "Cliente do site"),
+  });
+  assert.equal(response.statusCode, 201);
+
+  const booking = await testPrisma.booking.findFirstOrThrow({
+    include: { service: true },
+  });
+  assert.equal(booking.businessId, business.id);
+  assert.equal(booking.businessId, booking.service.businessId);
+  // Decimal não é comparável por ===; o que importa é o valor.
+  assert.equal(booking.priceAtBooking?.toString(), service.price.toString());
+});
+
+// O caminho interno é outro controller e outro schema de entrada: precisa da
+// sua própria asserção, senão a invariante vale só metade do produto.
+test("reserva interna grava o tenant e o preço do momento", async () => {
+  const { business, employee, service, slots } = await seedBookableBusiness("tenant-interno");
+  const token = app.jwt.sign({
+    sub: employee.id,
+    role: employee.role,
+    businessId: business.id,
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/bookings",
+    headers: { authorization: `Bearer ${token}` },
+    payload: bookingPayload(slots[0].id, service.id, "Cliente do balcão"),
+  });
+  assert.equal(response.statusCode, 201);
+
+  const booking = await testPrisma.booking.findFirstOrThrow({
+    include: { service: true },
+  });
+  assert.equal(booking.businessId, business.id);
+  assert.equal(booking.businessId, booking.service.businessId);
+  assert.equal(booking.priceAtBooking?.toString(), service.price.toString());
+});
+
+// O preço congelado só serve se ele NÃO acompanhar o reajuste. Este teste é a
+// razão de a coluna existir: sem ela, "quanto o cliente gastou" seria recalculado
+// a partir de Service.price e mudaria retroativamente aqui.
+test("reajuste no serviço não altera o preço já gravado na reserva", async () => {
+  const { business, service, slots } = await seedBookableBusiness("preco-congelado");
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/public/businesses/${business.slug}/bookings`,
+    payload: bookingPayload(slots[0].id, service.id, "Cliente A"),
+  });
+  assert.equal(response.statusCode, 201);
+
+  await testPrisma.service.update({
+    where: { id: service.id },
+    data: { price: 999 },
+  });
+
+  const booking = await testPrisma.booking.findFirstOrThrow();
+  assert.equal(booking.priceAtBooking?.toString(), service.price.toString());
+  assert.notEqual(booking.priceAtBooking?.toString(), "999");
 });
 
 // Sem esta, o slot vira reservável de novo depois que a reserva existe: o

@@ -1,11 +1,18 @@
-import { BookingSource } from "@prisma/client";
+import { BookingSource, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 
 interface BookingData {
   serviceId: number;
+  // Redundante com o negócio do serviço, e é o ponto: quem escreve a reserva
+  // já sabe o tenant, então a coluna nasce preenchida em vez de depender de
+  // um backfill contínuo.
+  businessId: number;
   clientName: string;
   clientPhone: string;
   clientEmail: string | null;
+  // Preço congelado no ato. Decimal do Prisma, não number: o valor vem de
+  // Service.price e é repassado sem passar por float.
+  priceAtBooking: Prisma.Decimal;
   source: BookingSource;
 }
 
