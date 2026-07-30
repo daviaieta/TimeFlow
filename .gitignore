@@ -1,3 +1,8 @@
 .DS_Store
 .superpowers/
 .worktrees/
+
+# Cache de skills dos agentes: muda a cada update de plugin e não é código do projeto.
+.agents/
+.roo/
+skills-lock.json
