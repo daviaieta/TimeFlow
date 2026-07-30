@@ -1,0 +1,23 @@
+{
+ sk-403917828a9e0234-qcpxl5-c21901c "permissions": {
+    "allow": [
+      "Bash(npx prisma *)",
+      "Bash(node *)",
+      "Bash(docker exec *)",
+      "Bash(curl -s -w ' HTTP:%{http_code}\\\\n' -X POST http://localhost:3333/businesses -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"name\":\"Duplicada\",\"slug\":\"__TRACKED_VAR__\",\"admin\":{\"name\":\"Z\",\"email\":\"z@t.com\"}}')",
+      "Bash(mdfind \"kMDItemKind == 'Application'\")",
+      "Bash(kill 61095)",
+      "Bash(lsof -nP -iTCP:3333 -sTCP:LISTEN)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npm run *)",
+      "Bash(disown)",
+      "Bash(curl -s http://localhost:3333/)",
+      "Bash(cat .env.local)",
+      "Bash(cat .env)",
+      "Bash(curl -s -i -X OPTIONS http://localhost:3333/services/4 -H 'Origin: http://localhost:3000' -H 'Access-Control-Request-Method: PUT' -H 'Access-Control-Request-Headers: authorization,content-type')",
+      "Bash(curl -s -i -X OPTIONS http://localhost:3333/employees/13/services/4 -H 'Origin: http://localhost:3000' -H 'Access-Control-Request-Method: DELETE' -H 'Access-Control-Request-Headers: authorization,content-type')",
+      "Bash(npx tsx *)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

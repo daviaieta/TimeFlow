@@ -13,11 +13,14 @@ import { billingRoutes, stripeWebhookRoutes } from "./routes/billingRoutes";
 import { bookingRoutes } from "./routes/bookingRoutes";
 import { businessRoutes } from "./routes/businessRoutes";
 import { contactRoutes } from "./routes/contactRoutes";
+import { crmRoutes } from "./routes/crmRoutes";
 import { dashboardRoutes } from "./routes/dashboardRoutes";
 import { employeeRoutes } from "./routes/employeeRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
 import { publicRoutes } from "./routes/publicRoutes";
 import { serviceRoutes } from "./routes/serviceRoutes";
+import { notesRoutes } from "./routes/notesRoutes";
+import { tagsRoutes } from "./routes/tagsRoutes";
 import { MAX_IMAGE_BYTES } from "./services/imageRules";
 import "./interfaces/auth";
 
@@ -92,6 +95,16 @@ export function buildApp(): FastifyInstance {
   app.register(availabilityRoutes);
   app.register(bookingRoutes);
   app.register(publicRoutes);
+
+  // Com o CRM desligado não há prontuário para listar nem configurar: as rotas
+  // somem em vez de responderem um erro confuso. Mesmo padrão da cobrança — e
+  // a assimetria de polaridade é a mesma (ver config/env): esquecer a variável
+  // tem que ser inofensivo no sentido de NÃO expor o CRM. Ligar é ato explícito.
+  if (env.crmEnabled) {
+    app.register(crmRoutes);
+    app.register(notesRoutes);
+    app.register(tagsRoutes);
+  }
 
   return app;
 }

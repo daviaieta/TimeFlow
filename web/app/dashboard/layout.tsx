@@ -11,6 +11,7 @@ import {
   Mail01Icon,
   Scissor01Icon,
   Settings02Icon,
+  TagIcon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { BusinessMark } from "@/components/business-mark";
@@ -44,6 +45,18 @@ const navItems: {
     label: "Equipe",
     href: "/dashboard/team",
     icon: UserGroupIcon,
+    roles: ["ADMIN", "EMPLOYEE"],
+  },
+  {
+    label: "Clientes",
+    href: "/dashboard/clientes",
+    icon: UserGroupIcon,
+    roles: ["ADMIN", "EMPLOYEE"],
+  },
+  {
+    label: "Tags",
+    href: "/dashboard/tags",
+    icon: TagIcon,
     roles: ["ADMIN", "EMPLOYEE"],
   },
   {
