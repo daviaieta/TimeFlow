@@ -1,6 +1,6 @@
 import "dotenv/config";
 import path from "node:path";
-import { resolveStorageConfig } from "../lib/storage/storageConfig";
+import { assertStorageReadyForProduction, resolveStorageConfig } from "../lib/storage/storageConfig";
 import { parseOrigins } from "./origins";
 
 function required(name: string): string {
@@ -12,6 +12,7 @@ function required(name: string): string {
 }
 
 const webOrigins = parseOrigins(process.env.WEB_ORIGIN);
+const nodeEnv = process.env.NODE_ENV ?? "development";
 
 // Cobrança desligada durante o mês de cortesia do primeiro cliente: nenhum
 // negócio é bloqueado por assinatura e as rotas de checkout não sobem. O
@@ -19,13 +20,27 @@ const webOrigins = parseOrigins(process.env.WEB_ORIGIN);
 // um deploy com variável faltando entregaria o produto de graça em silêncio.
 const billingEnabled = process.env.BILLING_ENABLED !== "false";
 
+// Resolvido antes do objeto `env` de propósito: a checagem de produção abaixo
+// precisa do storage já resolvido e do nodeEnv, e derruba o boot se a
+// combinação for perigosa — ver assertStorageReadyForProduction.
+const storage = resolveStorageConfig(process.env, {
+  // "" conta como "não configurado" (?? só cobre undefined): descomentar a
+  // variável no .env.example sem preencher não pode gravar na raiz do
+  // processo nem gerar uma baseUrl vazia.
+  rootDir: process.env.UPLOADS_DIR || path.resolve(process.cwd(), "uploads"),
+  baseUrl: (
+    process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT ?? 3333}`
+  ).replace(/\/+$/, ""),
+});
+assertStorageReadyForProduction(nodeEnv, storage);
+
 export const env = {
   billingEnabled,
   port: Number(process.env.PORT ?? 3333),
   // Em container, o default do Fastify (127.0.0.1) faria o serviço não
   // receber tráfego externo. 0.0.0.0 escuta em todas as interfaces.
   host: process.env.HOST ?? "0.0.0.0",
-  nodeEnv: process.env.NODE_ENV ?? "development",
+  nodeEnv,
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
   // CORS aceita todas; o link de convite (e-mail, precisa de uma URL só)
@@ -48,14 +63,8 @@ export const env = {
   // Destino das notificações de contato. Sem valor, o serviço cai no e-mail
   // do SUPERADMIN cadastrado no banco.
   contactInbox: process.env.CONTACT_INBOX ?? null,
-  // Resolvido no boot de propósito: configuração do R2 pela metade derruba o
-  // servidor agora, em vez de silenciosamente gravar no disco efêmero e só
-  // dar sinal quando as fotos sumirem.
-  storage: resolveStorageConfig(process.env, {
-    rootDir: process.env.UPLOADS_DIR ?? path.resolve(process.cwd(), "uploads"),
-    baseUrl: (process.env.PUBLIC_API_URL ?? `http://localhost:${process.env.PORT ?? 3333}`).replace(
-      /\/+$/,
-      "",
-    ),
-  }),
+  // Resolvido no boot de propósito: configuração do R2 pela metade (ou, em
+  // produção, ausente) derruba o servidor agora, em vez de silenciosamente
+  // gravar no disco efêmero e só dar sinal quando as fotos sumirem.
+  storage,
 };

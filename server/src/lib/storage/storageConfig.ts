@@ -52,3 +52,18 @@ export function resolveStorageConfig(
     publicUrl: source.R2_PUBLIC_URL!.trim().replace(/\/+$/, ""),
   };
 }
+
+// resolveStorageConfig sozinho deixa passar batido o caso "zero variáveis do
+// R2 em produção": ele é indistinguível de desenvolvimento e cai em disco em
+// silêncio. Em produção isso apaga as fotos a cada deploy do Railway (disco
+// efêmero) sem nenhum erro — os *Key sobrevivem no Postgres apontando para
+// nada. Ruling: derrubar o boot é melhor que perder dado calado.
+export function assertStorageReadyForProduction(nodeEnv: string, storage: StorageConfig): void {
+  if (nodeEnv !== "production" || storage.mode !== "disk") return;
+
+  throw new Error(
+    "Armazenamento em disco não é permitido em produção: o disco do container é " +
+      `apagado a cada deploy e as fotos seriam perdidas sem aviso. Defina as ` +
+      `variáveis do Cloudflare R2: ${R2_VARS.join(", ")}.`,
+  );
+}
