@@ -47,8 +47,13 @@ export function buildApp(): FastifyInstance {
 
   app.register(fastifyMultipart, {
     // O plugin corta o stream no limite: um arquivo gigante nunca chega a
-    // virar Buffer na memória do processo.
-    limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+    // virar Buffer na memória do processo. `fields: 0` e `parts: 2` fecham a
+    // brecha que sobrava: sem eles, os defaults do busboy (fieldSize de 1 MB,
+    // parts na casa dos milhares) deixam uma requisição autenticada empurrar
+    // muitos megabytes em campos de texto antes de qualquer arquivo — o
+    // bodyLimit do Fastify não vale para multipart. O front nunca manda
+    // campo nenhum, só o arquivo.
+    limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 0, parts: 2 },
   });
 
   // Só no modo disco. Em produção quem serve as imagens é o R2, e expor uma
