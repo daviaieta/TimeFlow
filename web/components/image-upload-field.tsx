@@ -31,6 +31,11 @@ function translateError(error: unknown): string {
   if (error.status === 400) return "Envie uma imagem JPG, PNG ou WebP de até 2 MB.";
   if (error.status === 413) return "A imagem é grande demais. Escolha uma menor.";
   if (error.status === 403) return "Você não tem permissão para trocar esta imagem.";
+  if (error.status === 404) return "Este item não existe mais. Recarregue a página.";
+  // Caminho realista em produção: R2 fora do ar, token revogado, bucket
+  // errado. Sem isto o usuário lê "Internal server error" em inglês, que é o
+  // que o errorHandler devolve para qualquer 5xx.
+  if (error.status >= 500) return "Não foi possível enviar a imagem agora. Tente de novo em instantes.";
 
   return error.message;
 }
@@ -116,6 +121,11 @@ export function ImageUploadField({
             variant="outline"
             disabled={busy}
             onClick={() => inputRef.current?.click()}
+            // O input de arquivo é display:none (sai da árvore de
+            // acessibilidade) e este botão é quem de fato rotula a ação; sem
+            // o nome do campo aqui, dois campos seguidos (logo e banner, por
+            // exemplo) ficam indistinguíveis para leitor de tela.
+            aria-label={`${currentUrl ? "Trocar" : "Enviar"} ${label.toLowerCase()}`}
           >
             {busy ? <Spinner data-icon="inline-start" /> : null}
             {currentUrl ? "Trocar" : "Enviar imagem"}
