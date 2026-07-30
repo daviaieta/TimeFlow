@@ -104,7 +104,7 @@ export const employeeService = {
   },
 
   async deleteEmployee(businessId: number, id: number) {
-    await findOwnedEmployee(businessId, id);
+    const employee = await findOwnedEmployee(businessId, id);
 
     const booked = await employeeRepository.countBookedAvailabilities(id);
     if (booked > 0) {
@@ -112,6 +112,10 @@ export const employeeService = {
     }
 
     await employeeRepository.deleteWithLinks(id);
+    // Sem isto, a foto de quem saiu da empresa continua pública para sempre:
+    // a linha some do banco, mas o objeto no bucket não tem mais dono que o
+    // apague depois.
+    await imageService.discardImage(employee.avatarKey);
   },
 
   async linkService(businessId: number, employeeId: number, serviceId: number) {
@@ -140,7 +144,16 @@ export const employeeService = {
       ownerId: target.id,
       bytes,
     });
-    const updated = await employeeRepository.setAvatarKey(target.id, key);
+
+    let updated;
+    try {
+      updated = await employeeRepository.setAvatarKey(target.id, key);
+    } catch (error) {
+      // O objeto novo já foi gravado; se o banco recusar a troca, ele fica
+      // órfão. Descarta em best-effort para o bucket não crescer sem dono.
+      await imageService.discardImage(key);
+      throw error;
+    }
     await imageService.discardImage(target.avatarKey);
 
     return { id: updated.id, avatarUrl: imageService.imageUrl(updated.avatarKey) };

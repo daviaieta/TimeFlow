@@ -157,6 +157,40 @@ test("DELETE limpa a key da logo", async () => {
   assert.equal(saved.logoKey, null);
 });
 
+// Requisito da spec: trocar uma imagem apaga o objeto anterior em
+// best-effort. O código já faz isso (businessService ~204), mas sem este
+// teste um refactor que remova o discardImage continua verde e o bucket
+// cresce sem limite.
+test("trocar a logo apaga o objeto anterior do storage", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const first = multipart(pngBytes());
+
+  const firstResponse = await app.inject({
+    method: "POST",
+    url: `/businesses/${alfa.business.id}/logo`,
+    headers: { ...first.headers, authorization: `Bearer ${tokenFor(alfa.admin)}` },
+    payload: first.payload,
+  });
+  const firstPath = new URL(firstResponse.json().business.logoUrl).pathname;
+
+  const second = multipart(pngBytes());
+  const secondResponse = await app.inject({
+    method: "POST",
+    url: `/businesses/${alfa.business.id}/logo`,
+    headers: { ...second.headers, authorization: `Bearer ${tokenFor(alfa.admin)}` },
+    payload: second.payload,
+  });
+  const secondPath = new URL(secondResponse.json().business.logoUrl).pathname;
+
+  assert.notEqual(firstPath, secondPath);
+
+  const oldObject = await app.inject({ method: "GET", url: firstPath });
+  assert.equal(oldObject.statusCode, 404);
+
+  const newObject = await app.inject({ method: "GET", url: secondPath });
+  assert.equal(newObject.statusCode, 200);
+});
+
 test("EMPLOYEE sobe o próprio avatar", async () => {
   const alfa = await seedBookableBusiness("alfa");
   const { payload, headers } = multipart(pngBytes());
@@ -280,6 +314,32 @@ test("DELETE limpa a key do avatar", async () => {
     where: { id: alfa.employee.id },
   });
   assert.equal(saved.avatarKey, null);
+});
+
+// Sem isto, a foto de quem saiu da empresa continua acessível a qualquer um
+// com a URL para sempre: deleteEmployee apagava a linha mas nunca chamava
+// discardImage (employeeService ~106).
+test("apagar colaborador apaga o avatar do storage", async () => {
+  const alfa = await seedBookableBusiness("alfa");
+  const { payload, headers } = multipart(pngBytes());
+
+  const uploadResponse = await app.inject({
+    method: "POST",
+    url: `/employees/${alfa.employee.id}/avatar`,
+    headers: { ...headers, authorization: `Bearer ${tokenFor(alfa.employee)}` },
+    payload,
+  });
+  const avatarPath = new URL(uploadResponse.json().employee.avatarUrl).pathname;
+
+  const deleteResponse = await app.inject({
+    method: "DELETE",
+    url: `/employees/${alfa.employee.id}`,
+    headers: { authorization: `Bearer ${tokenFor(alfa.admin)}` },
+  });
+  assert.equal(deleteResponse.statusCode, 204);
+
+  const orphan = await app.inject({ method: "GET", url: avatarPath });
+  assert.equal(orphan.statusCode, 404);
 });
 
 test("upload maior que 2 MB responde 4xx em português e não grava nada", async () => {

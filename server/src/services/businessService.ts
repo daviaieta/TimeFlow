@@ -200,7 +200,15 @@ export const businessService = {
     const key = await imageService.storeImage({ slot, ownerId: businessId, bytes });
     const previousKey = slot === "logo" ? business.logoKey : business.bannerKey;
 
-    const updated = await businessRepository.setImageKey(businessId, slot, key);
+    let updated;
+    try {
+      updated = await businessRepository.setImageKey(businessId, slot, key);
+    } catch (error) {
+      // O objeto novo já foi gravado; se o banco recusar a troca, ele fica
+      // órfão. Descarta em best-effort para o bucket não crescer sem dono.
+      await imageService.discardImage(key);
+      throw error;
+    }
     await imageService.discardImage(previousKey);
 
     return toBusinessImages(updated);
