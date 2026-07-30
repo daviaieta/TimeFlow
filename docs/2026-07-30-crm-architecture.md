@@ -772,7 +772,7 @@ Public and internal booking start resolving/creating customers and profiles behi
 >
 > Verified-phone matching (§4.1 step 3) is live in code but inert in practice: nothing sets `phoneVerifiedAt` until an SMS provider exists (§17 decision 1). Phone normalization is Brazil-scoped (`identityRules.normalizePhoneE164`), consistent with the single-timezone assumption already in `bookingRules`, and returns null rather than a guess for anything it does not recognize. When SMS lands, that function becomes a call to `libphonenumber-js`; its signature is already shaped for the swap.
 
-**Phase 3 — historical backfill.**
+**Phase 3 — historical backfill. — SHIPPED 2026-07-30**
 Batched job, per business, ordered by `businessId` so it is resumable and its lock footprint is bounded.
 
 For each business, group its bookings by `coalesce(normalized_email, normalized_phone)`:
@@ -784,6 +784,83 @@ For each business, group its bookings by `coalesce(normalized_email, normalized_
 Cross-business unification does **not** happen here. It happens later, one verified login at a time, via §4.3. This is the single most important decision in the migration: a global email-based merge over unverified historical data would hand one person's history at one business to whoever else typed that address at another.
 
 *Rollback:* delete rows where `source = MIGRATION` and null out the `profileId` they set. Idempotent, re-runnable.
+
+> **Implementation.** `npm run backfill-crm` (simulate, the default) / `-- --apply` (write) / `-- --business <id>` (scope). Files: `services/crmBackfillRules.ts` (pure), `services/crmBackfillService.ts`, `repositories/crmBackfillRepository.ts`, `scripts/backfillCrm.ts`. Tests: 15 unit, 10 integration.
+>
+> The three properties each have a mechanism, not an intention. **Idempotent:** only bookings with `profileId IS NULL` are written, and aggregates are *recomputed from the rows* rather than incremented. **Interruptible:** one transaction per contact group, so killing the process leaves finished groups whole and the rest untouched. **Deterministic:** businesses ordered by id, groups by serialized key, bookings by id — necessary because channel claiming is a *global* race between businesses, so unstable ordering would give a different result each run.
+>
+> **Grouping must read the business's full booking history, not just the unlinked rows.** This was got wrong first and caught by the interrupted-run test. The profile a contact already has is discovered from a booking *in its own group* that is already linked — it cannot be found by channel, because the channel may have been nulled when another business claimed it first. Reading only unlinked bookings means the linked sibling is absent from the group, so a run interrupted mid-group creates a *second* profile for the same contact on rerun. And the group key depends on JavaScript-side normalization, so no SQL predicate can fetch "the rest of this group" — Postgres does not know `(11) 99999-8888` and `+5511999998888` are the same contact.
+>
+> **Simulation is one transaction, rolled back at the end** — not per-group transactions that are individually discarded. Cross-business channel claiming has to be simulated for real; with separate rolled-back transactions the second business would see the channel free and the report would lie.
+
+#### Assumptions recorded (audit log)
+
+Every judgement the backfill makes that is not forced by the data:
+
+1. **Group key is `coalesce(normalized_email, normalized_phone)`.** Email wins when both exist.
+2. **Name never groups.** "Davi", "davi" and "Davi Silva" may be three people; grouping by name would invent associations.
+3. **Under-merging is accepted.** One booking with an email and another with only a phone, from the same person at the same business, land in *different* groups and produce two profiles. The alternative — union by any shared channel — would also merge two people who share a phone, and that is not undoable without a merge log. Wrong direction of error is the one that is cheap to fix later.
+4. **Bookings with no recognizable channel are left unresolved.** `profileId` stays null; no identity is created. This follows the documented procedure — a booking with neither key has no group — and is preferable to one identity per booking.
+5. **Cross-business unification never happens here.** Two businesses with the same historical email produce two PROVISIONAL identities. The first business processed (lowest id) claims the channel; later ones get `null` and keep the value on `CustomerProfile.display*` and `Booking.client*`. Only a verified login merges them (§4.3).
+6. **`displayName` comes from the group's oldest booking**; `displayPhone` likewise; `displayEmail` is the first non-null email in id order. Arbitrary between equally plausible values, so the criterion is fixed and recorded. Staff edits survive later bookings (§2.3).
+7. **`priceAtBooking` is never backfilled.** Null bookings enter `totalSpent` at *today's* `Service.price` and set `spendIsEstimated = true`. A value copied from the current price would be indistinguishable from a real snapshot.
+8. **Identities are created with no credentials and no verified channel.** Historical contact data is not proof of ownership. Every backfilled identity is PROVISIONAL, `passwordHash` null, both `*VerifiedAt` null.
+9. **A profile created by phase-2 live writes is reused, not duplicated,** and its `source` is left as it was (`PUBLIC_BOOKING`, not rewritten to `MIGRATION`).
+10. **When a group somehow contains two different linked profiles**, the one on the oldest booking wins. Should not occur; defined so it is deterministic if it does.
+
+#### Verification SQL
+
+Run after `--apply`. Every one of the seven invariants must return **0**.
+
+```sql
+-- 1. no profile crosses a tenant boundary
+SELECT count(*) FROM "Booking" b JOIN "CustomerProfile" p ON p.id = b."profileId"
+WHERE p."businessId" IS DISTINCT FROM b."businessId";
+
+-- 2. cached counter matches the rows
+SELECT count(*) FROM "CustomerProfile" p
+WHERE p."bookingsCount" <> (SELECT count(*) FROM "Booking" b WHERE b."profileId" = p.id);
+
+-- 3. totalSpent matches the sum of the rows
+SELECT count(*) FROM "CustomerProfile" p WHERE p."totalSpent" <> (
+  SELECT coalesce(sum(coalesce(b."priceAtBooking", s.price)), 0)
+  FROM "Booking" b JOIN "Service" s ON s.id = b."serviceId" WHERE b."profileId" = p.id);
+
+-- 4. no backfilled identity can log in
+SELECT count(*) FROM "Customer"
+WHERE "passwordHash" IS NOT NULL OR "emailVerifiedAt" IS NOT NULL OR "phoneVerifiedAt" IS NOT NULL;
+
+-- 5. one profile per customer per business
+SELECT count(*) FROM (SELECT "customerId", "businessId" FROM "CustomerProfile"
+  GROUP BY 1,2 HAVING count(*) > 1) d;
+
+-- 6. no identity is shared across businesses (true only until the first verified merge)
+SELECT count(*) FROM (SELECT "customerId" FROM "CustomerProfile"
+  GROUP BY 1 HAVING count(DISTINCT "businessId") > 1) d;
+
+-- 7. everything is PROVISIONAL / MIGRATION
+SELECT state, count(*) FROM "Customer" GROUP BY 1;
+SELECT source, count(*), count(*) FILTER (WHERE "spendIsEstimated") FROM "CustomerProfile" GROUP BY 1;
+```
+
+Note on invariant 6: it holds immediately after the backfill and is *expected to stop holding* once verified logins begin merging identities in phase 5. It is a backfill check, not a permanent one.
+
+#### Development-database run (2026-07-30)
+
+| | before | after |
+|---|---|---|
+| bookings | 177 | 177 |
+| bookings linked | 0 | 167 |
+| bookings unresolved | 177 | 10 |
+| customers | 0 | 163 |
+| profiles | 0 | 163 |
+
+Runtime 0.4s for 177 bookings across 3 businesses; second `--apply` reported 0 created, 0 linked, and all counts unchanged. All seven invariants returned 0.
+
+**Two edge cases the real data revealed, neither anticipated by the document:**
+
+- **Not one historical booking has an email** (0 of 177). `clientEmail` is optional on the public form and nobody fills it. So the entire backfill was phone-keyed, `customersClaimingEmail` was 0, and email-verified cross-business linking has no historical data to act on at all. This matters beyond the backfill: the claim flow in phase 5 will have almost nothing to offer customers, because there is no historical email to match a verified login against. Phone verification (§17 decision 1) is therefore worth more than the document assumed.
+- **The 10 unresolved bookings are one contact.** Ten bookings sharing a single 9-digit number — a mobile number missing its two-digit DDD. The normalizer refuses it rather than guessing a region, which is correct: prefixing a plausible DDD would fabricate a phone number that may belong to someone else. They stay unresolved and are re-reported on every run, which is the honest outcome, though it means every future run shows a non-zero unresolved count. A targeted data correction (a human confirming the DDD) is the only legitimate fix.
 
 **Phase 4 — business-facing CRM (read, then write).**
 CRM endpoints + dashboard screens. Read-only first (list, detail, history), then notes, tags, loyalty. No customer-facing surface yet, so a bug is visible only to staff.
