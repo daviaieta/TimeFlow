@@ -19,6 +19,7 @@ import { employeeRoutes } from "./routes/employeeRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
 import { publicRoutes } from "./routes/publicRoutes";
 import { serviceRoutes } from "./routes/serviceRoutes";
+import { loyaltyRoutes } from "./routes/loyaltyRoutes";
 import { notesRoutes } from "./routes/notesRoutes";
 import { tagsRoutes } from "./routes/tagsRoutes";
 import { MAX_IMAGE_BYTES } from "./services/imageRules";
@@ -102,6 +103,7 @@ export function buildApp(): FastifyInstance {
   // tem que ser inofensivo no sentido de NÃO expor o CRM. Ligar é ato explícito.
   if (env.crmEnabled) {
     app.register(crmRoutes);
+    app.register(loyaltyRoutes);
     app.register(notesRoutes);
     app.register(tagsRoutes);
   }

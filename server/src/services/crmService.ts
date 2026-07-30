@@ -169,6 +169,68 @@ export interface TagApi {
   createdAt: string;
 }
 
+// Loyalty ledger entry
+export interface LoyaltyEntryApi {
+  id: number;
+  kind: string;
+  points: number;
+  reason: string | null;
+  createdAt: string;
+  author: { id: number; name: string } | null;
+}
+
+function toLoyaltyEntryApi(entry: {
+  id: number;
+  kind: string;
+  points: number;
+  reason: string | null;
+  createdAt: Date;
+  author: { id: number; name: string } | null;
+}): LoyaltyEntryApi {
+  return {
+    id: entry.id,
+    kind: entry.kind,
+    points: entry.points,
+    reason: entry.reason,
+    createdAt: entry.createdAt.toISOString(),
+    author: entry.author,
+  };
+}
+
+// Loyalty keyset cursor: (createdAt DESC, id DESC)
+interface LoyaltyCursor {
+  createdAt: Date;
+  id: number;
+}
+
+const LOYALTY_CURSOR_PREFIX = "l1:";
+
+function encodeLoyaltyCursor(cursor: LoyaltyCursor): string {
+  const payload = `${LOYALTY_CURSOR_PREFIX}${cursor.createdAt.getTime()}|${cursor.id}`;
+  return Buffer.from(payload, "utf8").toString("base64url");
+}
+
+function decodeLoyaltyCursorOrThrow(raw: string | null): LoyaltyCursor | null {
+  if (raw === null || raw === "") return null;
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(raw, "base64url").toString("utf8");
+  } catch {
+    throw new BadRequestError("Invalid cursor");
+  }
+
+  const match = /^l1:(-?\d+)\|(-?\d+)$/s.exec(decoded);
+  if (!match) throw new BadRequestError("Invalid cursor");
+
+  const timestamp = Number(match[1]);
+  const id = Number(match[2]);
+  if (!Number.isFinite(timestamp) || !Number.isFinite(id)) throw new BadRequestError("Invalid cursor");
+  if (!Number.isInteger(id) || id < 0) throw new BadRequestError("Invalid cursor");
+
+  return { createdAt: new Date(timestamp), id };
+}
+
 export const crmService = {
   // -------- Listagem --------------------------------------------------------
 
@@ -398,6 +460,58 @@ export const crmService = {
     if (!profile) throw new NotFoundError("Customer not found");
 
     await crmRepository.detachTag(businessId, profile.id, tagId);
+  },
+
+  // -------- Loyalty ----------------------------------------------------------
+
+  async listLoyaltyEntries(
+    businessId: number,
+    publicId: string,
+    cursorRaw: string | null,
+    limit?: number,
+  ): Promise<{
+    entries: LoyaltyEntryApi[];
+    nextCursor: string | null;
+  }> {
+    const profile = await crmRepository.findProfileByPublicId(businessId, publicId);
+    if (!profile) throw new NotFoundError("Customer not found");
+
+    const cursor = decodeLoyaltyCursorOrThrow(cursorRaw);
+    const take = clampPageSize(limit);
+    const rows = await crmRepository.listLoyaltyEntries(businessId, profile.id, cursor, take);
+    const hasNext = rows.length > take;
+    const page = hasNext ? rows.slice(0, take) : rows;
+
+    const nextCursor =
+      hasNext && page.length > 0
+        ? encodeLoyaltyCursor({ createdAt: page[page.length - 1].createdAt, id: page[page.length - 1].id })
+        : null;
+
+    return {
+      entries: page.map(toLoyaltyEntryApi),
+      nextCursor,
+    };
+  },
+
+  async applyLoyaltyAdjust(
+    businessId: number,
+    publicId: string,
+    userId: number,
+    points: number,
+    reason: string,
+    idempotencyKey: string | null,
+  ): Promise<{ id: number; alreadyApplied: boolean }> {
+    const profile = await crmRepository.findProfileByPublicId(businessId, publicId);
+    if (!profile) throw new NotFoundError("Customer not found");
+
+    return crmRepository.applyLoyaltyAdjust({
+      businessId,
+      profileId: profile.id,
+      points,
+      reason,
+      authorId: userId,
+      idempotencyKey,
+    });
   },
 };
 
