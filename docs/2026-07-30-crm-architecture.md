@@ -727,6 +727,8 @@ then, outside the transaction: confirmation email, loyalty accrual job
 
 Two ordering notes that matter. The slot claim stays the **last** thing that can fail for a business reason, so identity work is never the cause of a lost slot. And loyalty accrual happens on **completion**, not creation — awarding points at booking time pays out no-shows.
 
+> **Discovered in phase 2: there is no completion event.** `Booking` has no status column; nothing in the system marks a booking completed, no-show or canceled. So `completedCount`, `noShowCount` and `canceledCount` are structurally unreachable, and the "accrue on completion" rule above has nothing to hook. Consequences, all recorded rather than worked around: those three counters stay 0; `totalSpent` is incremented at booking creation and therefore means **value booked, not value settled** — it includes no-shows; and loyalty accrual (phase 4) cannot be built correctly until a booking lifecycle exists. See §17 decision 7.
+
 Concurrency: two simultaneous first-time bookings by the same customer at the same business race on `@@unique([customerId, businessId])`; the loser retries the upsert and proceeds. Standard, and the constraint means the failure mode is a retry rather than a duplicate.
 
 ---
@@ -734,6 +736,19 @@ Concurrency: two simultaneous first-time bookings by the same customer at the sa
 ## 8. Migration strategy
 
 Expand/contract, six phases, each independently deployable and revertible. `PRD.md`/`TASKS.md` conventions apply: pause between phases.
+
+### 8.0 Canonical migration process (approved 2026-07-30)
+
+`prisma migrate dev` is **not** the workflow for this project. It goes interactive the moment a migration contains anything it wants to warn about — a unique constraint on a populated table, a backfill it cannot infer — and fails outright in a non-interactive shell. It also emits no backfill, which is exactly where the risk lives. The canonical process for every migration from phase 0 onward:
+
+1. Edit `schema.prisma`; run `prisma validate` and `prisma format`.
+2. Generate the SQL: `prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script`, written into a hand-named `prisma/migrations/<timestamp>_<name>/migration.sql`.
+3. **Read and edit the SQL.** Add the header comment explaining the phase, any backfill, statement reordering (backfill before index creation), and `IF NOT EXISTS` on indexes that production will pre-create `CONCURRENTLY`.
+4. Apply with `prisma migrate deploy`, then `prisma generate`.
+5. Verify no drift: `prisma migrate diff` again must report *"This is an empty migration."*
+6. Verify the data claim with SQL, not by assumption — a count query whose expected answer is zero.
+
+Triggers and functions are invisible to Prisma's diff, so hand-written ones survive later migrations without producing drift. That is what makes the `CustomerMergeLog` lock viable (§2.3).
 
 **Phase 0 — `Booking.businessId` (prerequisite, no CRM yet). — SHIPPED 2026-07-30**
 Add nullable column + FK + `@@index([businessId, createdAt])`. Backfill `UPDATE booking SET business_id = service.business_id`. Write path sets it explicitly in `createBookingForBusiness`, which already receives `businessId`. Verify with `SELECT count(*) FROM booking b JOIN service s ON s.id=b.service_id WHERE b.business_id IS DISTINCT FROM s.business_id` returning 0, then set NOT NULL in a follow-up migration. Existing reads keep joining through `Service`; nothing depends on the new column yet.
@@ -747,9 +762,15 @@ All new models, no writes, no routes. Deploy is a pure DDL migration. Verifies i
 
 > Migration `20260730051747_add_crm_schema`: 6 enums + `CustomerMergeActor`, 9 tables, 27 indexes, and three nullable columns on `Booking` (`profileId`, `idempotencyKey`, plus `@@unique([businessId, idempotencyKey])` — NULLs are distinct in Postgres, so the 177 existing rows cannot collide). Generated with `prisma migrate diff` and hand-edited to append the `CustomerMergeLog` append-only trigger. `resetDatabase` in `src/test/testDb.ts` learned the new FK order, and uses `TRUNCATE` for the merge log. Tests: 7 added, all database-level invariants (one profile per customer per business; the same customer holding independent profiles at two businesses; DB-side `publicId` defaults reaching even raw-SQL inserts; merge log rejecting UPDATE and DELETE; per-tenant `idempotencyKey` with coexisting NULLs; notes and loyalty entries carrying their own `businessId`). Suite after: 165 unit, 61 integration, all passing. No drift.
 
-**Phase 2 — dual write on the booking path.**
+**Phase 2 — dual write on the booking path. — SHIPPED 2026-07-30**
 Public and internal booking start resolving/creating customers and profiles behind a `CRM_ENABLED` flag (same pattern as the existing `BILLING_ENABLED`). `Booking.client*` continue to be written unconditionally and remain authoritative for display. Nothing reads the CRM yet.
 *Rollback:* flip flag. Orphan profiles are harmless.
+
+> `CRM_ENABLED` defaults to **off** (`=== "true"`), deliberately the opposite polarity to `BILLING_ENABLED` (`!== "false"`). Billing forgotten must fail *closed* toward charging; a new write path on the booking transaction forgotten must fail closed toward *not writing*. Files: `config/env.ts`, new `services/identityRules.ts` (pure) and `repositories/customerRepository.ts` (transaction-scoped), plus the wiring in `bookingRepository.createWithClaim` and `bookingService`. Tests: 12 unit on the pure rules, 10 integration on identity behaviour under concurrency, 1 integration asserting the flag-off path writes nothing. Suite after: 177 unit, 72 integration. The concurrency file was run three times consecutively, 10/10 each time.
+>
+> **Unique violations cannot be caught inside a Postgres transaction** — an error poisons the transaction, so `try { insert } catch (P2002) { select }` is not available where the insert shares a transaction with the slot claim. Every insert that can collide uses `createMany({ skipDuplicates: true })` (`ON CONFLICT DO NOTHING`, never throws) followed by a re-read. `createMany` does not return ids, so the isolated case — an identity claiming *no* channel, therefore unable to conflict — uses plain `create` instead. This is the mechanism that makes identity resolution safe under concurrency without any retry loop, and it is why the resolver is written procedurally against the transaction rather than as a single upsert.
+>
+> Verified-phone matching (§4.1 step 3) is live in code but inert in practice: nothing sets `phoneVerifiedAt` until an SMS provider exists (§17 decision 1). Phone normalization is Brazil-scoped (`identityRules.normalizePhoneE164`), consistent with the single-timezone assumption already in `bookingRules`, and returns null rather than a guess for anything it does not recognize. When SMS lands, that function becomes a call to `libphonenumber-js`; its signature is already shaped for the swap.
 
 **Phase 3 — historical backfill.**
 Batched job, per business, ordered by `businessId` so it is resumable and its lock footprint is bounded.
@@ -1167,3 +1188,6 @@ These are business/product calls, not engineering ones, and they change scope:
 4. **Loyalty rules.** `pointsPerUnit` and expiry are modelled, but redemption (what points buy, and whether a discount touches the booking price) is not. Needs a product definition before phase 4's write path.
 5. **Guest-forever vs required accounts.** This design keeps guest booking permanently. If the product later wants mandatory accounts per business, that is a `BusinessCrmSettings` flag, not a schema change — but measure conversion before enabling it anywhere.
 6. **Portal domain.** `/conta` on the marketing domain, or a separate subdomain? Affects cookie scope and CORS config (`config/origins.ts`).
+7. **Booking lifecycle status — blocks phase 4 loyalty.** Raised during phase 2. `Booking` has no status, so completion/no-show/cancellation do not exist as events. Options: (a) add `BookingStatus` + the transitions and the staff UI to drive them, which is a feature in its own right and arguably belongs before the CRM's loyalty half; (b) treat "past its slot and not canceled" as completed, which is derivable today with zero new UI but silently counts no-shows as revenue; (c) ship phase 4 with loyalty accrual manual-only (`ADJUST` by staff) and defer automatic accrual. Recommendation: (c) for phase 4, then (a) as its own project — it is the honest sequencing, and it keeps `totalSpent`'s meaning explicit rather than pretending derivation is measurement.
+8. **`resetDatabase` refactor — deferred by decision (2026-07-30).** The integration harness resets 17 tables in a hand-maintained FK order and will keep growing; a single `TRUNCATE ... CASCADE` would be order-independent and faster. Not to be touched during the CRM implementation: keeping the harness that validates every phase stable is worth more than improving it incrementally. Tracked as technical debt to be picked up after phase 6.
+9. **Phone library.** `normalizePhoneE164` is Brazil-only by design (§8 phase 2 note). Swap to `libphonenumber-js` when either SMS verification or non-BR businesses arrive — whichever comes first.

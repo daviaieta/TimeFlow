@@ -20,6 +20,15 @@ const nodeEnv = process.env.NODE_ENV ?? "development";
 // um deploy com variável faltando entregaria o produto de graça em silêncio.
 const billingEnabled = process.env.BILLING_ENABLED !== "false";
 
+// CRM (docs/2026-07-30-crm-architecture.md). O default é DESLIGADO, ao
+// contrário da cobrança, e a assimetria é de propósito: cobrança desligada
+// entrega o produto de graça, então esquecer a variável tem que ser inofensivo
+// no sentido de LIGAR. Aqui é o oposto — a flag liga escrita nova no caminho
+// mais crítico do sistema (a reserva), então esquecer a variável tem que ser
+// inofensivo no sentido de NÃO ligar. Ligar é ato explícito, por negócio, no
+// provedor.
+const crmEnabled = process.env.CRM_ENABLED === "true";
+
 // Resolvido antes do objeto `env` de propósito: a checagem de produção abaixo
 // precisa do storage já resolvido e do nodeEnv, e derruba o boot se a
 // combinação for perigosa — ver assertStorageReadyForProduction.
@@ -36,6 +45,7 @@ assertStorageReadyForProduction(nodeEnv, storage);
 
 export const env = {
   billingEnabled,
+  crmEnabled,
   port: Number(process.env.PORT ?? 3333),
   // Em container, o default do Fastify (127.0.0.1) faria o serviço não
   // receber tráfego externo. 0.0.0.0 escuta em todas as interfaces.

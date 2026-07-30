@@ -166,6 +166,33 @@ test("reserva interna e reserva pública disputando o mesmo slot", async () => {
   assert.equal((await testPrisma.booking.findMany()).length, 1);
 });
 
+// Este arquivo NÃO importa enableCrm, então roda com a flag no default
+// (desligada) — e é isso que o torna a garantia de compatibilidade da fase 2:
+// todos os outros testes daqui provam que o fluxo de reserva segue idêntico, e
+// este prova que nenhuma escrita nova acontece por trás.
+test("com o CRM desligado, a reserva não cria identidade nem prontuário", async () => {
+  const { business, service, slots } = await seedBookableBusiness("crm-desligado");
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/public/businesses/${business.slug}/bookings`,
+    payload: {
+      ...bookingPayload(slots[0].id, service.id, "Davi"),
+      clientEmail: "davi@exemplo.test",
+    },
+  });
+  assert.equal(response.statusCode, 201);
+
+  assert.equal(await testPrisma.customer.count(), 0);
+  assert.equal(await testPrisma.customerProfile.count(), 0);
+
+  const booking = await testPrisma.booking.findFirstOrThrow();
+  assert.equal(booking.profileId, null);
+  // E o que já existia continua exatamente como antes.
+  assert.equal(booking.businessId, business.id);
+  assert.equal(booking.clientEmail, "davi@exemplo.test");
+});
+
 // Fase 0 do CRM: a reserva grava o próprio tenant. O que o teste tranca é a
 // invariante que o backfill garantiu para o passado e o código tem que manter
 // no futuro — Booking.businessId é SEMPRE o businessId do serviço reservado.

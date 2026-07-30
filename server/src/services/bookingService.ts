@@ -1,12 +1,15 @@
-import { BookingSource } from "@prisma/client";
+import { BookingSource, CustomerLinkSource } from "@prisma/client";
+import { env } from "../config/env";
 import { ConflictError, NotFoundError } from "../lib/errors";
 import { sendBookingConfirmationEmail } from "../lib/emails/bookingConfirmation";
 import { availabilityRepository } from "../repositories/availabilityRepository";
 import { bookingRepository } from "../repositories/bookingRepository";
+import { BookingIdentityInput } from "../repositories/customerRepository";
 import { businessRepository } from "../repositories/businessRepository";
 import { employeeRepository } from "../repositories/employeeRepository";
 import { serviceRepository } from "../repositories/serviceRepository";
 import { isSlotUpcoming, normalizeClientName, slotRunForDuration } from "./bookingRules";
+import { normalizeEmail, normalizePhoneE164 } from "./identityRules";
 
 export interface CreateBookingInput {
   availabilityId: number;
@@ -69,6 +72,30 @@ export async function createBookingForBusiness(
     throw new ConflictError("This service does not fit in the selected time slot");
   }
 
+  const clientPhone = input.clientPhone.trim();
+  const clientEmail = input.clientEmail?.trim() || null;
+
+  // Com o CRM desligado nada disto é montado e o repositório não recebe o
+  // parâmetro: o caminho da reserva é exatamente o de antes, coluna profileId
+  // nula inclusive. Ligar a flag é o que introduz escrita nova.
+  const identity: BookingIdentityInput | undefined = env.crmEnabled
+    ? {
+        businessId,
+        clientName,
+        email: normalizeEmail(clientEmail),
+        phoneE164: normalizePhoneE164(clientPhone),
+        // Display guarda o que a pessoa digitou; o normalizado serve para
+        // encontrar identidade, não para mostrar ao negócio.
+        displayPhone: clientPhone || null,
+        displayEmail: clientEmail,
+        bookedAt: now,
+        // Reserva pelo site é o cliente se cadastrando; pelo balcão é a
+        // atendente cadastrando por ele. O prontuário registra qual dos dois.
+        source:
+          source === "ONLINE" ? CustomerLinkSource.PUBLIC_BOOKING : CustomerLinkSource.STAFF,
+      }
+    : undefined;
+
   const booking = await bookingRepository.createWithClaim(
     run.map((slotInRun) => slotInRun.id),
     {
@@ -78,11 +105,12 @@ export async function createBookingForBusiness(
       // única fonte de verdade para o tenant nesta função.
       businessId,
       clientName,
-      clientPhone: input.clientPhone.trim(),
-      clientEmail: input.clientEmail?.trim() || null,
+      clientPhone,
+      clientEmail,
       priceAtBooking: service.price,
       source,
     },
+    identity,
   );
   if (!booking) {
     throw new ConflictError("This time slot has just been booked");
