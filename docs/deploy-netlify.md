@@ -45,7 +45,40 @@ Depois que a Netlify devolver o domínio do site:
 Sem o domínio da Netlify em `WEB_ORIGIN`, o navegador barra toda chamada à API
 por CORS e a tela fica em branco sem erro visível no servidor.
 
-## 4. Conferir depois do primeiro deploy
+## 4. Armazenamento de imagens (Cloudflare R2)
+
+As fotos não podem ficar no disco do container: o Railway o recria a cada
+deploy e as imagens sumiriam sem nenhum erro no log.
+
+1. Cloudflare → R2 → **Create bucket**. Nome: `timeflow`.
+2. No bucket → **Settings** → **Public access** → habilitar o domínio
+   `r2.dev` (ou ligar um domínio próprio, se houver). A URL que aparece é o
+   valor de `R2_PUBLIC_URL`.
+3. R2 → **Manage API tokens** → **Create API token**, permissão *Object Read &
+   Write*, escopo só neste bucket. Ele mostra `Access Key ID` e
+   `Secret Access Key` uma única vez.
+4. Railway → variáveis do serviço da API:
+
+| Variável | Valor |
+| --- | --- |
+| `R2_ACCOUNT_ID` | ID da conta Cloudflare (aparece na URL do painel do R2) |
+| `R2_ACCESS_KEY_ID` | do token criado no passo 3 |
+| `R2_SECRET_ACCESS_KEY` | do token criado no passo 3 |
+| `R2_BUCKET` | `timeflow` |
+| `R2_PUBLIC_URL` | URL pública do passo 2, sem barra no fim |
+
+É tudo ou nada: com algumas dessas variáveis e não todas, a API recusa subir
+com a mensagem dizendo quais faltam. Sem nenhuma, ela grava em disco — o que
+só serve para desenvolvimento.
+
+**Ordem segura de deploy: crie o bucket e as cinco variáveis antes de subir
+esta branch para produção.** Em `NODE_ENV=production`, a API também recusa
+subir em modo disco (nenhuma variável do R2 definida) — na ordem inversa,
+o boot cai. E se algum upload tivesse acontecido em modo disco antes disso,
+as `*Key` sobreviveriam no Postgres ao redeploy seguinte, mas os arquivos no
+disco efêmero não — sem nenhum caminho automático de volta.
+
+## 5. Conferir depois do primeiro deploy
 
 Dá para diagnosticar quase tudo de fora, sem abrir o painel:
 

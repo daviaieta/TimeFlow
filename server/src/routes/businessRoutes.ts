@@ -2,9 +2,14 @@ import { Role } from "@prisma/client";
 import { FastifyInstance } from "fastify";
 import {
   createBusiness,
+  deleteBusinessBanner,
+  deleteBusinessLogo,
   listBusinesses,
   resendInvite,
   updateBusiness,
+  uploadBusinessBanner,
+  uploadBusinessLogo,
+  BusinessImageParams,
   CreateBusinessBody,
   ResendInviteBody,
   ResendInviteParams,
@@ -79,6 +84,17 @@ const updateBusinessSchema = {
   },
 };
 
+const businessImageParamsSchema = {
+  params: {
+    type: "object",
+    required: ["id"],
+    additionalProperties: false,
+    properties: {
+      id: { type: "integer" },
+    },
+  },
+};
+
 export async function businessRoutes(app: FastifyInstance): Promise<void> {
   // Sem schema: a rota não recebe params, body nem querystring.
   app.get(
@@ -112,5 +128,42 @@ export async function businessRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [authenticate, authorize(Role.ADMIN)],
     },
     updateBusiness,
+  );
+
+  // Sem schema de body: o corpo é multipart, validado por conteúdo no service.
+  app.post<{ Params: BusinessImageParams }>(
+    "/businesses/:id/logo",
+    {
+      schema: businessImageParamsSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN)],
+    },
+    uploadBusinessLogo,
+  );
+
+  app.delete<{ Params: BusinessImageParams }>(
+    "/businesses/:id/logo",
+    {
+      schema: businessImageParamsSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN)],
+    },
+    deleteBusinessLogo,
+  );
+
+  app.post<{ Params: BusinessImageParams }>(
+    "/businesses/:id/banner",
+    {
+      schema: businessImageParamsSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN)],
+    },
+    uploadBusinessBanner,
+  );
+
+  app.delete<{ Params: BusinessImageParams }>(
+    "/businesses/:id/banner",
+    {
+      schema: businessImageParamsSchema,
+      preHandler: [authenticate, authorize(Role.ADMIN)],
+    },
+    deleteBusinessBanner,
   );
 }

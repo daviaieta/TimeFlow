@@ -7,6 +7,7 @@ export interface NextSlot {
 export interface PublicEmployee {
   id: number;
   name: string;
+  avatarUrl: string | null;
   nextSlot: NextSlot | null;
 }
 
@@ -19,7 +20,13 @@ export interface PublicService {
 }
 
 export interface PublicBusiness {
-  business: { name: string; slug: string; address: string | null };
+  business: {
+    name: string;
+    slug: string;
+    address: string | null;
+    logoUrl: string | null;
+    bannerUrl: string | null;
+  };
   professionals: PublicEmployee[];
   services: PublicService[];
 }

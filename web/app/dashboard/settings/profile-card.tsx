@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
+import { ImageUploadField } from "@/components/image-upload-field";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -13,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { AuthUser } from "@/lib/auth";
+import { IMAGE_PRESETS } from "@/lib/image";
 import { useRefreshAuthUser } from "../auth-context";
 
 function translateError(error: unknown): string {
@@ -30,6 +32,7 @@ export function ProfileCard({ user }: { user: AuthUser }) {
 
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [currentPassword, setCurrentPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -75,6 +78,23 @@ export function ProfileCard({ user }: { user: AuthUser }) {
 
       <form onSubmit={handleSubmit} className="mt-6">
         <FieldGroup>
+          {/* SUPERADMIN não tem negócio nem linha de colaborador — o endpoint
+              de avatar devolve 404 pra esse papel, então o campo nem aparece. */}
+          {user.role !== "SUPERADMIN" ? (
+            <ImageUploadField
+              label="Sua foto"
+              description="Aparece para os clientes na hora de escolher com quem agendar."
+              preset={IMAGE_PRESETS.avatar}
+              currentUrl={avatarUrl}
+              uploadPath={`/employees/${user.id}/avatar`}
+              responseField={{ entity: "employee", field: "avatarUrl" }}
+              onDone={async (url) => {
+                setAvatarUrl(url);
+                await refresh();
+              }}
+            />
+          ) : null}
+
           <Field>
             <FieldLabel htmlFor="profile-name">Nome</FieldLabel>
             <Input

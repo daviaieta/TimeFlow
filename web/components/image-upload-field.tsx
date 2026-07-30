@@ -1,0 +1,154 @@
+"use client";
+
+import { ChangeEvent, useRef, useState } from "react";
+import { ApiError, fetchAdapter, uploadAdapter } from "@/adapters/fetchAdapter";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
+import { ImagePreset } from "@/lib/image";
+import { resizeToWebp } from "@/lib/imageFile";
+import { extractResponseUrl, ImageResponseField } from "@/lib/imageResponseField";
+import { cn } from "@/lib/utils";
+
+interface ImageUploadFieldProps {
+  label: string;
+  description: string;
+  preset: ImagePreset;
+  currentUrl: string | null;
+  /** Caminho na API. POST envia, DELETE remove. */
+  uploadPath: string;
+  /** De onde vem a URL na resposta do upload — ver imageResponseField.ts. */
+  responseField: ImageResponseField;
+  onDone: (url: string | null) => void | Promise<void>;
+  shape?: "square" | "wide";
+}
+
+function translateError(error: unknown): string {
+  if (!(error instanceof ApiError)) {
+    return error instanceof Error ? error.message : "Erro inesperado.";
+  }
+
+  if (error.status === 400) return "Envie uma imagem JPG, PNG ou WebP de até 2 MB.";
+  if (error.status === 413) return "A imagem é grande demais. Escolha uma menor.";
+  if (error.status === 403) return "Você não tem permissão para trocar esta imagem.";
+  if (error.status === 404) return "Este item não existe mais. Recarregue a página.";
+  // Caminho realista em produção: R2 fora do ar, token revogado, bucket
+  // errado. Sem isto o usuário lê "Internal server error" em inglês, que é o
+  // que o errorHandler devolve para qualquer 5xx.
+  if (error.status >= 500) return "Não foi possível enviar a imagem agora. Tente de novo em instantes.";
+
+  return error.message;
+}
+
+export function ImageUploadField({
+  label,
+  description,
+  preset,
+  currentUrl,
+  uploadPath,
+  responseField,
+  onDone,
+  shape = "square",
+}: ImageUploadFieldProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Limpa aqui e não no fim: sem isto, escolher o mesmo arquivo de novo
+    // depois de um erro não dispara change nenhum.
+    event.target.value = "";
+    if (!file) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      const blob = await resizeToWebp(file, preset);
+      const data = await uploadAdapter({ path: uploadPath, file: blob });
+
+      await onDone(extractResponseUrl(data, responseField));
+    } catch (err) {
+      setError(translateError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove() {
+    setError(null);
+    setBusy(true);
+    try {
+      await fetchAdapter({ method: "DELETE", path: uploadPath });
+      await onDone(null);
+    } catch (err) {
+      setError(translateError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Field>
+      <FieldLabel>{label}</FieldLabel>
+
+      <div className="flex items-center gap-4">
+        {currentUrl ? (
+          // URL de bucket externo, sem domínio conhecido de antemão para
+          // configurar em next/image — mesma razão do BusinessMark.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={currentUrl}
+            alt=""
+            className={cn(
+              "rounded-2xl border object-cover",
+              shape === "wide" ? "h-20 w-48" : "size-20",
+            )}
+          />
+        ) : (
+          <div
+            aria-hidden
+            className={cn(
+              "rounded-2xl border border-dashed bg-muted/40",
+              shape === "wide" ? "h-20 w-48" : "size-20",
+            )}
+          />
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+            // O input de arquivo é display:none (sai da árvore de
+            // acessibilidade) e este botão é quem de fato rotula a ação; sem
+            // o nome do campo aqui, dois campos seguidos (logo e banner, por
+            // exemplo) ficam indistinguíveis para leitor de tela.
+            aria-label={`${currentUrl ? "Trocar" : "Enviar"} ${label.toLowerCase()}`}
+          >
+            {busy ? <Spinner data-icon="inline-start" /> : null}
+            {currentUrl ? "Trocar" : "Enviar imagem"}
+          </Button>
+
+          {currentUrl ? (
+            <Button type="button" variant="ghost" disabled={busy} onClick={handleRemove}>
+              Remover
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleChange}
+      />
+
+      <FieldDescription>{description}</FieldDescription>
+      {error ? <FieldError>{error}</FieldError> : null}
+    </Field>
+  );
+}

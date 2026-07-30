@@ -111,9 +111,9 @@ test("rótulo do próximo horário", () => {
 
 test("menor próximo horário entre profissionais", () => {
   const earliest = earliestNextSlot([
-    { id: 1, name: "A", nextSlot: { date: "2026-07-27T00:00:00.000Z", startTime: "09:00" } },
-    { id: 2, name: "B", nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" } },
-    { id: 3, name: "C", nextSlot: null },
+    { id: 1, name: "A", avatarUrl: null, nextSlot: { date: "2026-07-27T00:00:00.000Z", startTime: "09:00" } },
+    { id: 2, name: "B", avatarUrl: null, nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" } },
+    { id: 3, name: "C", avatarUrl: null, nextSlot: null },
   ]);
 
   assert.deepEqual(earliest, { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" });
@@ -121,15 +121,15 @@ test("menor próximo horário entre profissionais", () => {
 
 test("mesmo dia desempata pelo horário", () => {
   const earliest = earliestNextSlot([
-    { id: 1, name: "A", nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" } },
-    { id: 2, name: "B", nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "09:30" } },
+    { id: 1, name: "A", avatarUrl: null, nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "16:00" } },
+    { id: 2, name: "B", avatarUrl: null, nextSlot: { date: "2026-07-25T00:00:00.000Z", startTime: "09:30" } },
   ]);
 
   assert.equal(earliest?.startTime, "09:30");
 });
 
 test("ninguém com vaga devolve null", () => {
-  assert.equal(earliestNextSlot([{ id: 1, name: "A", nextSlot: null }]), null);
+  assert.equal(earliestNextSlot([{ id: 1, name: "A", avatarUrl: null, nextSlot: null }]), null);
 });
 
 test("preço decimal vira moeda brasileira", () => {

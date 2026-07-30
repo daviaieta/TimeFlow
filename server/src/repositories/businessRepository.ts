@@ -42,7 +42,9 @@ export const businessRepository = {
           include: {
             employees: {
               where: { employee: { password: { not: null } } },
-              include: { employee: { select: { id: true, name: true } } },
+              include: {
+                employee: { select: { id: true, name: true, avatarKey: true } },
+              },
             },
           },
         },
@@ -56,6 +58,15 @@ export const businessRepository = {
       // Campos explícitos, nunca o objeto do request inteiro: é o que impede
       // mass-assignment de colunas que o schema da rota não previu.
       data: { name: data.name, slug: data.slug, address: data.address },
+    });
+  },
+
+  // Campo escolhido por um union fechado, não por chave dinâmica: é o que
+  // impede a rota de escrever numa coluna que não seja de imagem.
+  setImageKey(id: number, slot: "logo" | "banner", key: string | null) {
+    return prisma.business.update({
+      where: { id },
+      data: slot === "logo" ? { logoKey: key } : { bannerKey: key },
     });
   },
 

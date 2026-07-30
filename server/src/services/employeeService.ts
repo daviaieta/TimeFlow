@@ -1,16 +1,24 @@
 import { Role, User } from "@prisma/client";
 import { env } from "../config/env";
-import { ConflictError, NotFoundError } from "../lib/errors";
+import { ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
 import { sendEmployeeInviteEmail } from "../lib/emails/invite";
 import { generateInviteToken } from "../lib/inviteToken";
 import { businessRepository } from "../repositories/businessRepository";
 import { employeeRepository } from "../repositories/employeeRepository";
 import { serviceRepository } from "../repositories/serviceRepository";
 import { userRepository } from "../repositories/userRepository";
+import { canEditEmployeeAvatar } from "./accountRules";
+import { imageService } from "./imageService";
 
 interface CreateEmployeeInput {
   name: string;
   email: string;
+}
+
+interface AvatarActor {
+  id: number;
+  role: Role;
+  businessId: number | null;
 }
 
 async function findOwnedEmployee(businessId: number, id: number): Promise<User> {
@@ -22,6 +30,26 @@ async function findOwnedEmployee(businessId: number, id: number): Promise<User> 
   return employee;
 }
 
+// A ordem importa. Fora do seu negócio, o alvo simplesmente "não existe" —
+// 403 aqui contaria que aquele id é de alguém, e isso vale para QUALQUER
+// papel (ADMIN ou EMPLOYEE), não só ADMIN: um EMPLOYEE do negócio A mirando
+// um id do negócio B não pode diferenciar "existe mas não é meu" de "não
+// existe". `actor.businessId === null` é o caso do SUPERADMIN — sem negócio,
+// "mesmo negócio" nunca pode bater por acidente. Dentro do negócio, o 403 é
+// informação legítima: você sabe que a pessoa existe, só não pode editá-la.
+async function findAvatarTarget(actor: AvatarActor, employeeId: number): Promise<User> {
+  const target = await employeeRepository.findById(employeeId);
+  if (!target || actor.businessId === null || target.businessId !== actor.businessId) {
+    throw new NotFoundError("Employee not found");
+  }
+
+  if (!canEditEmployeeAvatar(actor, target)) {
+    throw new ForbiddenError("You do not have permission to edit this avatar");
+  }
+
+  return target;
+}
+
 export const employeeService = {
   async listEmployees(businessId: number) {
     const employees = await employeeRepository.findManyByBusiness(businessId);
@@ -31,6 +59,7 @@ export const employeeService = {
       name: employee.name,
       email: employee.email,
       pendingInvite: employee.password === null,
+      avatarUrl: imageService.imageUrl(employee.avatarKey),
       services: employee.services.map((link) => link.service),
     }));
   },
@@ -75,7 +104,7 @@ export const employeeService = {
   },
 
   async deleteEmployee(businessId: number, id: number) {
-    await findOwnedEmployee(businessId, id);
+    const employee = await findOwnedEmployee(businessId, id);
 
     const booked = await employeeRepository.countBookedAvailabilities(id);
     if (booked > 0) {
@@ -83,6 +112,10 @@ export const employeeService = {
     }
 
     await employeeRepository.deleteWithLinks(id);
+    // Sem isto, a foto de quem saiu da empresa continua pública para sempre:
+    // a linha some do banco, mas o objeto no bucket não tem mais dono que o
+    // apague depois.
+    await imageService.discardImage(employee.avatarKey);
   },
 
   async linkService(businessId: number, employeeId: number, serviceId: number) {
@@ -99,5 +132,39 @@ export const employeeService = {
   async unlinkService(businessId: number, employeeId: number, serviceId: number) {
     await findOwnedEmployee(businessId, employeeId);
     await employeeRepository.unlinkService(employeeId, serviceId);
+  },
+
+  async updateAvatar(actor: AvatarActor, employeeId: number, bytes: Buffer) {
+    const target = await findAvatarTarget(actor, employeeId);
+
+    // Grava no storage ANTES do banco: na ordem inversa, uma falha no upload
+    // deixaria a linha apontando para um objeto que não existe.
+    const key = await imageService.storeImage({
+      slot: "avatar",
+      ownerId: target.id,
+      bytes,
+    });
+
+    let updated;
+    try {
+      updated = await employeeRepository.setAvatarKey(target.id, key);
+    } catch (error) {
+      // O objeto novo já foi gravado; se o banco recusar a troca, ele fica
+      // órfão. Descarta em best-effort para o bucket não crescer sem dono.
+      await imageService.discardImage(key);
+      throw error;
+    }
+    await imageService.discardImage(target.avatarKey);
+
+    return { id: updated.id, avatarUrl: imageService.imageUrl(updated.avatarKey) };
+  },
+
+  async removeAvatar(actor: AvatarActor, employeeId: number) {
+    const target = await findAvatarTarget(actor, employeeId);
+
+    const updated = await employeeRepository.setAvatarKey(target.id, null);
+    await imageService.discardImage(target.avatarKey);
+
+    return { id: updated.id, avatarUrl: null };
   },
 };

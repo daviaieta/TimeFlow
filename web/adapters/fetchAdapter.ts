@@ -62,3 +62,38 @@ export const fetchAdapter = async <T = unknown>({
 
   return { data, status: res.status, statusText: res.statusText };
 };
+
+interface UploadAdapterInput {
+  path: string;
+  file: Blob;
+  filename?: string;
+}
+
+// Separado do fetchAdapter porque o corpo é FormData: declarar Content-Type à
+// mão aqui quebraria o boundary que o browser gera sozinho.
+export const uploadAdapter = async <T = unknown>({
+  path,
+  file,
+  filename = "imagem.webp",
+}: UploadAdapterInput): Promise<T> => {
+  const token = typeof window === "undefined" ? null : getToken();
+
+  const form = new FormData();
+  form.append("file", file, filename);
+
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+
+  const data = (await res.json().catch(() => ({}))) as T;
+
+  if (!res.ok) {
+    const message =
+      (data as { message?: string }).message ?? "Erro inesperado. Tente novamente.";
+    throw new ApiError(message, res.status);
+  }
+
+  return data;
+};

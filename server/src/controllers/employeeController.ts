@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from "fastify";
+import { readUploadedImage } from "../lib/readUploadedImage";
 import { requireBusinessId } from "../lib/requireBusinessId";
 import { employeeService } from "../services/employeeService";
 
@@ -63,4 +64,30 @@ export async function unlinkService(
     request.params.serviceId,
   );
   reply.status(204).send();
+}
+
+export async function uploadEmployeeAvatar(
+  request: FastifyRequest<{ Params: EmployeeParams }>,
+  reply: FastifyReply,
+): Promise<void> {
+  const bytes = await readUploadedImage(request);
+  const employee = await employeeService.updateAvatar(
+    { id: request.user.sub, role: request.user.role, businessId: request.user.businessId },
+    request.params.id,
+    bytes,
+  );
+
+  reply.send({ employee });
+}
+
+export async function deleteEmployeeAvatar(
+  request: FastifyRequest<{ Params: EmployeeParams }>,
+  reply: FastifyReply,
+): Promise<void> {
+  const employee = await employeeService.removeAvatar(
+    { id: request.user.sub, role: request.user.role, businessId: request.user.businessId },
+    request.params.id,
+  );
+
+  reply.send({ employee });
 }

@@ -10,6 +10,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: Role;
+  avatarUrl: string | null;
   business:
     | {
         id: number;
@@ -18,6 +19,8 @@ export interface AuthUser {
         address: string | null;
         planName: PlanName | null;
         subscriptionStatus: SubscriptionStatus;
+        logoUrl: string | null;
+        bannerUrl: string | null;
       }
     | null;
 }

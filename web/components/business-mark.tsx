@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 interface BusinessMarkProps {
   name: string;
   slug: string;
-  /** Reservado para a Fase 2, quando o negócio puder ter logo própria. */
+  /** URL pública da imagem; sem ela, cai nas iniciais. */
   src?: string | null;
   className?: string;
 }

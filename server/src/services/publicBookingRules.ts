@@ -16,17 +16,24 @@ export interface CatalogService {
   name: string;
   duration: number;
   price: PriceLike;
-  employees: { id: number; name: string }[];
+  employees: { id: number; name: string; avatarUrl: string | null }[];
 }
 
 export interface PublicEmployeeDto {
   id: number;
   name: string;
+  avatarUrl: string | null;
   nextSlot: NextSlot | null;
 }
 
 export interface PublicBusinessDto {
-  business: { name: string; slug: string; address: string | null };
+  business: {
+    name: string;
+    slug: string;
+    address: string | null;
+    logoUrl: string | null;
+    bannerUrl: string | null;
+  };
   professionals: PublicEmployeeDto[];
   services: {
     id: number;
@@ -59,7 +66,13 @@ export interface BookingSummary {
 // Serviço sem profissional vinculado sai do catálogo: o cliente não pode
 // escolher um caminho sem horário possível.
 export function toPublicBusinessDto(
-  business: { name: string; slug: string; address?: string | null },
+  business: {
+    name: string;
+    slug: string;
+    address?: string | null;
+    logoUrl: string | null;
+    bannerUrl: string | null;
+  },
   services: CatalogService[],
   freeSlots: EmployeeSlot[],
   now: Date,
@@ -68,9 +81,10 @@ export function toPublicBusinessDto(
 
   const withNextSlot =
     (nextSlots: Map<number, NextSlot>) =>
-    (employee: { id: number; name: string }): PublicEmployeeDto => ({
+    (employee: { id: number; name: string; avatarUrl: string | null }): PublicEmployeeDto => ({
       id: employee.id,
       name: employee.name,
+      avatarUrl: employee.avatarUrl,
       nextSlot: nextSlots.get(employee.id) ?? null,
     });
 
@@ -94,6 +108,8 @@ export function toPublicBusinessDto(
       name: business.name,
       slug: business.slug,
       address: business.address ?? null,
+      logoUrl: business.logoUrl,
+      bannerUrl: business.bannerUrl,
     },
     professionals: [...professionals.values()],
     // Cada serviço anuncia a próxima vaga em que ELE cabe: uma descoloração

@@ -19,6 +19,7 @@ export const employeeRepository = {
         name: true,
         email: true,
         password: true,
+        avatarKey: true,
         services: {
           select: { service: { select: { id: true, name: true } } },
         },
@@ -28,6 +29,10 @@ export const employeeRepository = {
 
   findById(id: number) {
     return prisma.user.findUnique({ where: { id } });
+  },
+
+  setAvatarKey(id: number, key: string | null) {
+    return prisma.user.update({ where: { id }, data: { avatarKey: key } });
   },
 
   create(data: CreateEmployeeInput) {

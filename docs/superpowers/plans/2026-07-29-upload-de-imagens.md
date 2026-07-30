@@ -1686,7 +1686,7 @@ Em `dashboardService`, ao montar `EmployeeRow[]`, mapear `avatarUrl: imageServic
 
 Em `dashboardRules.test.ts`, acrescentar `avatarUrl: null` às fixtures de employee e um `assert.equal(rows[0].avatarUrl, "https://cdn/x.webp")` num caso que passe o valor preenchido.
 
-> **Atenção:** `dashboardRules.ts`, `dashboardRules.test.ts` e `dashboardService.ts` já têm alterações não commitadas no working tree. Rode `git diff` nesses arquivos antes de editar e não desfaça nada que já esteja lá.
+> **Atenção:** `dashboardRules.ts`, `dashboardRules.test.ts` e `dashboardService.ts` acabaram de ser reescritos no commit `fa81c6c` (redesenho do painel). Leia o estado atual do arquivo antes de editar, em vez de assumir a versão antiga.
 
 - [ ] **Step 6: Rodar tudo**
 

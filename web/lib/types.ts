@@ -18,6 +18,7 @@ export interface Employee {
   name: string;
   email: string;
   pendingInvite: boolean;
+  avatarUrl: string | null;
   services: EmployeeServiceLink[];
 }
 

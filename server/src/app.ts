@@ -1,6 +1,8 @@
 import "dotenv/config";
 import fastifyCors from "@fastify/cors";
 import fastifyJwt from "@fastify/jwt";
+import fastifyMultipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { fastify, FastifyInstance } from "fastify";
 import { corsOptions } from "./config/cors";
 import { env } from "./config/env";
@@ -16,6 +18,7 @@ import { employeeRoutes } from "./routes/employeeRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
 import { publicRoutes } from "./routes/publicRoutes";
 import { serviceRoutes } from "./routes/serviceRoutes";
+import { MAX_IMAGE_BYTES } from "./services/imageRules";
 import "./interfaces/auth";
 
 // Monta a aplicação sem subir o processo. Separar as duas coisas é o que
@@ -41,6 +44,32 @@ export function buildApp(): FastifyInstance {
 
   app.register(fastifyCors, corsOptions);
   app.register(fastifyJwt, { secret: env.jwtSecret });
+
+  app.register(fastifyMultipart, {
+    // O plugin corta o stream no limite: um arquivo gigante nunca chega a
+    // virar Buffer na memória do processo. `fields: 0` e `parts: 2` fecham a
+    // brecha que sobrava: sem eles, os defaults do busboy (fieldSize de 1 MB,
+    // parts na casa dos milhares) deixam uma requisição autenticada empurrar
+    // muitos megabytes em campos de texto antes de qualquer arquivo — o
+    // bodyLimit do Fastify não vale para multipart. O front nunca manda
+    // campo nenhum, só o arquivo.
+    limits: { fileSize: MAX_IMAGE_BYTES, files: 1, fields: 0, parts: 2 },
+  });
+
+  // Só no modo disco. Em produção quem serve as imagens é o R2, e expor uma
+  // pasta que nem existe seria só superfície a mais.
+  if (env.storage.mode === "disk") {
+    app.register(fastifyStatic, {
+      root: env.storage.rootDir,
+      prefix: "/uploads/",
+      // Sem wildcard: false — com ele, o plugin listaria a pasta uma única
+      // vez no registro e só serviria os arquivos que já existiam naquele
+      // instante; todo upload real acontece depois do boot e viraria 404
+      // para sempre. O plugin já tolera a pasta ainda não existir no
+      // primeiro boot (registra um log.warn e segue).
+    });
+  }
+
   app.setErrorHandler(errorHandler);
 
   app.get("/", async () => {

@@ -28,20 +28,32 @@ export function ShowcaseHero({ catalog, todayKey }: ShowcaseHeroProps) {
 
   return (
     <header>
-      {/* Listra diagonal sobre a cor do negócio: toldo de fachada, o mais
-          perto de uma vitrine física que dá para chegar sem foto nenhuma. */}
-      <div
-        aria-hidden
-        style={{
-          backgroundImage: `repeating-linear-gradient(115deg, rgba(255,255,255,0.07) 0 26px, transparent 26px 52px), linear-gradient(135deg, ${from}, ${to})`,
-        }}
-        className="h-36 w-full sm:h-48 lg:h-60"
-      />
+      {catalog.business.bannerUrl ? (
+        // Banner do negócio vem de URL externa cadastrada pelo dono; next/image
+        // exigiria configurar cada domínio permitido antecipadamente.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={catalog.business.bannerUrl}
+          alt=""
+          className="h-36 w-full object-cover sm:h-48 lg:h-60"
+        />
+      ) : (
+        // Listra diagonal sobre a cor do negócio: toldo de fachada, o mais
+        // perto de uma vitrine física que dá para chegar sem foto nenhuma.
+        <div
+          aria-hidden
+          style={{
+            backgroundImage: `repeating-linear-gradient(115deg, rgba(255,255,255,0.07) 0 26px, transparent 26px 52px), linear-gradient(135deg, ${from}, ${to})`,
+          }}
+          className="h-36 w-full sm:h-48 lg:h-60"
+        />
+      )}
 
       <div className="mx-auto w-full max-w-4xl px-5 sm:px-8">
         <BusinessMark
           name={catalog.business.name}
           slug={slug}
+          src={catalog.business.logoUrl}
           className="-mt-10 size-20 sm:-mt-12 sm:size-24"
         />
 

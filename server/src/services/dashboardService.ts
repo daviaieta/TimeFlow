@@ -1,6 +1,7 @@
 import { dashboardRepository } from "../repositories/dashboardRepository";
 import { employeeRepository } from "../repositories/employeeRepository";
 import { serviceRepository } from "../repositories/serviceRepository";
+import { imageService } from "./imageService";
 import {
   DashboardAlert,
   DashboardKpis,
@@ -95,6 +96,7 @@ export const dashboardService = {
       name: employee.name,
       pendingInvite: employee.password === null,
       serviceIds: employee.services.map((link) => link.service.id),
+      avatarUrl: imageService.imageUrl(employee.avatarKey),
     }));
 
     const catalog = services.map((service) => ({

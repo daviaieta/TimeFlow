@@ -257,6 +257,7 @@ export default function TeamPage() {
                 setRemoveError(null);
                 setRemoving(target);
               }}
+              onAvatarChanged={loadData}
             />
           ))
         )}

@@ -3,6 +3,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { TeamAvatar } from "@/components/team-avatar";
 import { formatMinutes } from "@/lib/schedule";
 import {
   PublicEmployee,
@@ -105,15 +106,11 @@ export function EmployeePicker({
                   active ? "bg-accent" : "hover:bg-muted/60"
                 }`}
               >
-                <span
-                  className={`flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors duration-200 ${
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {employee.name.charAt(0).toUpperCase()}
-                </span>
+                <TeamAvatar
+                  name={employee.name}
+                  src={employee.avatarUrl}
+                  className="size-10 rounded-xl"
+                />
 
                 <span className="min-w-0 flex-1">
                   <span
