@@ -182,8 +182,9 @@ que a troca de foto não seja servida do cache com a versão antiga.
 
 Funcionando: autenticação com convite, CRUD de serviços, gestão de equipe e
 vínculos com serviços, agenda de disponibilidade com geração em lote, página
-pública de reserva com seleção de serviço, profissional e horário, e dashboard
-do dono com KPIs, ocupação e mapa de calor.
+pública de reserva com seleção de serviço, profissional e horário, dashboard
+do dono com KPIs, ocupação e mapa de calor, e upload de logo, banner e avatar
+com storage em Cloudflare R2 (produção) ou disco (desenvolvimento).
 
 A caminho do MVP: painel de SUPERADMIN e configurações do negócio, reservas
 registradas manualmente pelo balcão, e-mails reais de convite e confirmação,
