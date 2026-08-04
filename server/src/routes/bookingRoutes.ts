@@ -17,6 +17,9 @@ const createBookingSchema = {
       clientName: { type: "string", minLength: 1, maxLength: 80 },
       clientPhone: { type: "string", minLength: 8, maxLength: 20 },
       clientEmail: { type: "string", format: "email", maxLength: 120 },
+      // Handle opaco do prontuário (§3). `format: uuid` é a primeira barreira:
+      // quem chuta id inteiro leva 400 antes de chegar no controller.
+      profilePublicId: { type: "string", format: "uuid" },
     },
   },
 };

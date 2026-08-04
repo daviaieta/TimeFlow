@@ -18,6 +18,11 @@ export interface BookingSummary {
   clientPhone: string;
   clientEmail: string | null;
   service: { id: number; name: string };
+  // client* acima continuam sendo o retrato do que foi digitado no ato (§15
+  // armadilha 5) — o prontuário ao lado é o cadastro vivo, que pode ter sido
+  // corrigido depois. São coisas diferentes de propósito: a agenda mostra o
+  // primeiro e linka para o segundo.
+  profile: { publicId: string; displayName: string } | null;
 }
 
 export interface AvailabilityRow {
