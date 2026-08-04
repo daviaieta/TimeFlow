@@ -674,3 +674,54 @@ model BusinessCrmSettings {
   // Se a página pública oferece "entrar para reservar mais rápido".
   customerLoginEnabled  Boolean @default(true)
 }
+
+// -----------------------------------------------------------------------------
+// Limitação de abuso compartilhada (§11.6) — pré-requisito da fase 5
+// -----------------------------------------------------------------------------
+
+// Contador de janela fixa, compartilhado entre processos. Substitui o Map por
+// processo, que zerava no restart e não enxergava outra instância — com
+// autenticação de cliente exposta à internet isso deixa de ser aceitável.
+//
+// Janela FIXA e não deslizante: deslizante exigiria uma linha por tentativa
+// (é uma lista de timestamps), e a janela fixa cabe numa linha por chave, com
+// incremento atômico num único INSERT ... ON CONFLICT. O preço é a rajada de
+// borda — até 2x o limite na virada de duas janelas — que é o trade-off
+// clássico e aceitável aqui.
+model RateLimitCounter {
+  // Namespace + identificador, montados em rateLimit.ts. O identificador que
+  // é dado pessoal (e-mail) entra como hash: um dump desta tabela não pode
+  // virar lista de quem tentou entrar.
+  key String @id
+
+  // Início da janela vigente. O fim é sempre início + windowMs, e é por isso
+  // que contar a tentativa BLOQUEADA não estende a punição: o fim não se move
+  // com a contagem.
+  windowStartedAt DateTime
+  count           Int      @default(0)
+
+  // Quando a linha pode ser varrida. Não é o fim da janela: é o fim mais uma
+  // folga, para a varredura não competir com uma janela ainda em uso.
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+// Bloqueio progressivo por identidade, separado do limite por IP (§11.6). São
+// controles diferentes de propósito: o limite por IP contém o atacante que
+// varre muitas contas de um lugar só; este contém o ataque distribuído contra
+// UMA conta, que passa por baixo de qualquer limite por IP.
+//
+// Conta falhas CONSECUTIVAS: o acerto apaga a linha. Sem isso, quem erra a
+// senha uma vez por semana acabaria bloqueado por acumulação.
+model AuthLockout {
+  key String @id
+
+  failures    Int       @default(0)
+  // Nulo enquanto as falhas não passam do limiar de tolerância.
+  lockedUntil DateTime?
+
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
