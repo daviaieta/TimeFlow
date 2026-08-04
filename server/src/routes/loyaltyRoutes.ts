@@ -3,6 +3,9 @@ import { FastifyInstance } from "fastify";
 import {
   createLoyaltyAdjust,
   getLoyaltyEntries,
+  CreateLoyaltyEntryBody,
+  LoyaltyCustomerParams,
+  LoyaltyQuery,
 } from "../controllers/loyaltyController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
@@ -13,7 +16,7 @@ const staffOrEmployee = authorize(Role.ADMIN, Role.EMPLOYEE);
 const adminOnly = authorize(Role.ADMIN);
 
 export async function loyaltyRoutes(app: FastifyInstance): Promise<void> {
-  app.get(
+  app.get<{ Params: LoyaltyCustomerParams; Querystring: LoyaltyQuery }>(
     "/customers/:publicId/loyalty",
     {
       schema: {
@@ -39,7 +42,7 @@ export async function loyaltyRoutes(app: FastifyInstance): Promise<void> {
     getLoyaltyEntries,
   );
 
-  app.post(
+  app.post<{ Params: LoyaltyCustomerParams; Body: CreateLoyaltyEntryBody }>(
     "/customers/:publicId/loyalty",
     {
       schema: {

@@ -50,7 +50,7 @@ function get(path: string, bearer: string) {
   });
 }
 
-function post(path: string, bearer: string, payload: unknown) {
+function post(path: string, bearer: string, payload: Record<string, unknown>) {
   return app.inject({
     method: "POST",
     url: path,
@@ -175,7 +175,7 @@ test("publicId de outro negócio retorna 404", async () => {
 });
 
 test("requisição sem autenticação retorna 401", async () => {
-  const { business, admin, service, slots } = await seedBookableBusiness("loyalty-noauth");
+  const { business, service, slots } = await seedBookableBusiness("loyalty-noauth");
   await book(business.slug, "Davi", slots[0].id, service.id);
   const profile = await testPrisma.customerProfile.findFirstOrThrow();
 

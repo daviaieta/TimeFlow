@@ -18,6 +18,12 @@ import {
   parseProfileStatus,
   validateLoyaltyAdjust,
   validateTagInput,
+  DEFAULT_CRM_SETTINGS,
+  DISPLAY_NAME_MAX,
+  InvalidCustomerError,
+  validateCreateCustomer,
+  validateCrmSettingsPatch,
+  validateUpdateCustomer,
 } from "./customerRules";
 
 test("encodeProfileCursor / decodeProfileCursor roundtrip", () => {
@@ -155,4 +161,125 @@ test("decodeBookingCursor rejeita formato errado", () => {
     () => decodeBookingCursor(Buffer.from("b1:1|-1", "utf8").toString("base64url")),
     InvalidCursorError,
   );
+});
+
+// -----------------------------------------------------------------------------
+// Fase 4, passo 5: cadastro pela equipe
+// -----------------------------------------------------------------------------
+
+test("validateCreateCustomer normaliza o canal sem reescrever o que foi digitado", () => {
+  const result = validateCreateCustomer({
+    displayName: "  Davi Silva  ",
+    displayPhone: "(11) 99999-8888",
+    displayEmail: "  Davi@X.TEST ",
+  });
+
+  assert.equal(result.displayName, "Davi Silva");
+  // display* fica como a atendente digitou: é para onde o negócio liga.
+  assert.equal(result.displayPhone, "(11) 99999-8888");
+  assert.equal(result.displayEmail, "Davi@X.TEST");
+  // canal canônico é o que resolve identidade.
+  assert.equal(result.phoneE164, "+5511999998888");
+  assert.equal(result.email, "davi@x.test");
+});
+
+test("validateCreateCustomer aceita cadastro só com nome", () => {
+  const result = validateCreateCustomer({ displayName: "Cliente de balcão" });
+
+  assert.equal(result.displayPhone, null);
+  assert.equal(result.displayEmail, null);
+  assert.equal(result.phoneE164, null);
+  assert.equal(result.email, null);
+});
+
+test("validateCreateCustomer trata string vazia como ausência de canal", () => {
+  const result = validateCreateCustomer({ displayName: "Ana", displayPhone: "   ", displayEmail: "" });
+
+  assert.equal(result.displayPhone, null);
+  assert.equal(result.phoneE164, null);
+  assert.equal(result.email, null);
+});
+
+test("validateCreateCustomer recusa nome vazio e nome longo demais", () => {
+  assert.throws(() => validateCreateCustomer({ displayName: "   " }), InvalidCustomerError);
+  assert.throws(
+    () => validateCreateCustomer({ displayName: "x".repeat(DISPLAY_NAME_MAX + 1) }),
+    InvalidCustomerError,
+  );
+});
+
+test("validateCreateCustomer recusa telefone que o normalizador não reconhece", () => {
+  // 9 dígitos: celular sem DDD. O normalizador se recusa a chutar a região, e
+  // aqui isso vira 400 em vez de cadastro sem canal.
+  assert.throws(
+    () => validateCreateCustomer({ displayName: "Davi", displayPhone: "999998888" }),
+    InvalidCustomerError,
+  );
+});
+
+test("validateCreateCustomer recusa e-mail malformado", () => {
+  assert.throws(
+    () => validateCreateCustomer({ displayName: "Davi", displayEmail: "davi@x" }),
+    InvalidCustomerError,
+  );
+});
+
+test("validateUpdateCustomer só devolve o que veio no corpo", () => {
+  const patch = validateUpdateCustomer({ displayName: " Novo Nome " });
+
+  assert.deepEqual(patch, { displayName: "Novo Nome" });
+  assert.equal("status" in patch, false, "campo ausente não vira undefined explícito");
+});
+
+test("validateUpdateCustomer distingue null (apaga) de ausente (não mexe)", () => {
+  const patch = validateUpdateCustomer({ displayPhone: null });
+
+  assert.deepEqual(patch, { displayPhone: null });
+});
+
+test("validateUpdateCustomer aceita status válido e recusa inválido", () => {
+  assert.deepEqual(validateUpdateCustomer({ status: "BLOCKED" }), { status: "BLOCKED" });
+  assert.throws(() => validateUpdateCustomer({ status: "SUMIU" }), InvalidCustomerError);
+});
+
+test("validateUpdateCustomer recusa corpo vazio", () => {
+  assert.throws(() => validateUpdateCustomer({}), InvalidCustomerError);
+});
+
+test("validateUpdateCustomer recusa telefone irreconhecível", () => {
+  assert.throws(() => validateUpdateCustomer({ displayPhone: "123" }), InvalidCustomerError);
+});
+
+// -----------------------------------------------------------------------------
+// Fase 4, passo 5: configuração de CRM
+// -----------------------------------------------------------------------------
+
+test("DEFAULT_CRM_SETTINGS espelha os defaults do schema", () => {
+  assert.deepEqual(DEFAULT_CRM_SETTINGS, {
+    loyaltyEnabled: false,
+    pointsPerUnit: 1,
+    pointsExpireAfterDays: null,
+    customerLoginEnabled: true,
+  });
+});
+
+test("validateCrmSettingsPatch devolve só os campos enviados", () => {
+  assert.deepEqual(validateCrmSettingsPatch({ loyaltyEnabled: true }), { loyaltyEnabled: true });
+});
+
+test("validateCrmSettingsPatch aceita null em pointsExpireAfterDays", () => {
+  assert.deepEqual(validateCrmSettingsPatch({ pointsExpireAfterDays: null }), {
+    pointsExpireAfterDays: null,
+  });
+});
+
+test("validateCrmSettingsPatch recusa pointsPerUnit fora de faixa", () => {
+  assert.throws(() => validateCrmSettingsPatch({ pointsPerUnit: 0 }), InvalidCustomerError);
+  assert.throws(() => validateCrmSettingsPatch({ pointsPerUnit: 1.5 }), InvalidCustomerError);
+  assert.throws(() => validateCrmSettingsPatch({ pointsPerUnit: 100_000 }), InvalidCustomerError);
+});
+
+test("validateCrmSettingsPatch recusa expiração negativa e corpo vazio", () => {
+  assert.throws(() => validateCrmSettingsPatch({ pointsExpireAfterDays: -1 }), InvalidCustomerError);
+  assert.throws(() => validateCrmSettingsPatch({}), InvalidCustomerError);
 });

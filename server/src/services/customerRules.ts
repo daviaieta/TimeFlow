@@ -14,6 +14,7 @@
 // repositório.
 
 import { CustomerProfileStatus, LoyaltyEntryKind } from "@prisma/client";
+import { normalizeEmail, normalizePhoneE164 } from "./identityRules";
 
 // -----------------------------------------------------------------------------
 // Pagination
@@ -101,6 +102,235 @@ export function parseProfileStatus(raw: string | undefined): CustomerProfileStat
   if (raw === undefined) return null;
   if (raw === "ACTIVE" || raw === "BLOCKED") return raw;
   return null;
+}
+
+// -----------------------------------------------------------------------------
+// Cadastro pela equipe (passo 5)
+// -----------------------------------------------------------------------------
+
+export class InvalidCustomerError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+export const DISPLAY_NAME_MAX = 120;
+export const DISPLAY_PHONE_MAX = 32;
+export const DISPLAY_EMAIL_MAX = 160;
+
+export interface CreateCustomerInput {
+  displayName: string;
+  displayPhone?: string | null;
+  displayEmail?: string | null;
+}
+
+// Duas faces do mesmo dado, de propósito:
+//   - display*: o que a atendente digitou, que é o que o negócio lê e para onde
+//     ele liga. Nunca é reescrito por normalização.
+//   - email/phoneE164: a forma canônica, e é SÓ ela que participa da resolução
+//     de identidade (§4.1). "(11) 99999-8888" e "+5511999998888" são a mesma
+//     pessoa; gravar o cru como canal criaria uma terceira identidade (§15.11).
+export interface ValidatedCustomerInput {
+  displayName: string;
+  displayPhone: string | null;
+  displayEmail: string | null;
+  email: string | null;
+  phoneE164: string | null;
+}
+
+function trimmedOrNull(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function requireDisplayName(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length < 1) throw new InvalidCustomerError("Nome é obrigatório");
+  if (trimmed.length > DISPLAY_NAME_MAX) throw new InvalidCustomerError("Nome é longo demais");
+  return trimmed;
+}
+
+// Diferença deliberada em relação à reserva pública: lá, um telefone que o
+// normalizador não reconhece vira `phoneE164 = null` em silêncio (a reserva não
+// pode falhar por causa disso, e o número digitado ainda vale como contato).
+// Aqui a origem é a atendente com o cliente na frente, então o erro de digitação
+// volta como 400 em vez de virar um cadastro sem canal — que depois não casaria
+// com a reserva do mesmo cliente e viraria prontuário duplicado.
+function channelOrThrow(
+  display: string | null,
+  normalize: (value: string) => string | null,
+  message: string,
+): string | null {
+  if (display === null) return null;
+  const normalized = normalize(display);
+  if (normalized === null) throw new InvalidCustomerError(message);
+  return normalized;
+}
+
+export function validateCreateCustomer(input: CreateCustomerInput): ValidatedCustomerInput {
+  const displayName = requireDisplayName(input.displayName);
+
+  const displayPhone = trimmedOrNull(input.displayPhone);
+  const displayEmail = trimmedOrNull(input.displayEmail);
+  if (displayPhone !== null && displayPhone.length > DISPLAY_PHONE_MAX) {
+    throw new InvalidCustomerError("Telefone é longo demais");
+  }
+  if (displayEmail !== null && displayEmail.length > DISPLAY_EMAIL_MAX) {
+    throw new InvalidCustomerError("E-mail é longo demais");
+  }
+
+  return {
+    displayName,
+    displayPhone,
+    displayEmail,
+    email: channelOrThrow(displayEmail, normalizeEmail, "E-mail inválido"),
+    phoneE164: channelOrThrow(displayPhone, normalizePhoneE164, "Telefone inválido"),
+  };
+}
+
+// PATCH: só o que veio no corpo é tocado. `undefined` é "não mexe";
+// `null` é "apaga o campo" — a distinção existe porque limpar um telefone
+// errado é uma operação legítima do balcão, e sem ela a equipe só conseguiria
+// sobrescrever, nunca corrigir para vazio.
+export interface UpdateCustomerInput {
+  displayName?: string;
+  displayPhone?: string | null;
+  displayEmail?: string | null;
+  status?: string;
+}
+
+export interface ValidatedCustomerPatch {
+  displayName?: string;
+  displayPhone?: string | null;
+  displayEmail?: string | null;
+  status?: CustomerProfileStatus;
+}
+
+export function validateUpdateCustomer(input: UpdateCustomerInput): ValidatedCustomerPatch {
+  const patch: ValidatedCustomerPatch = {};
+
+  if (input.displayName !== undefined) {
+    patch.displayName = requireDisplayName(input.displayName);
+  }
+
+  if (input.displayPhone !== undefined) {
+    const displayPhone = trimmedOrNull(input.displayPhone);
+    if (displayPhone !== null) {
+      if (displayPhone.length > DISPLAY_PHONE_MAX) {
+        throw new InvalidCustomerError("Telefone é longo demais");
+      }
+      // Mesma exigência da criação: o que a equipe grava tem que ser
+      // reconhecível como telefone, senão a próxima reserva do mesmo cliente
+      // não encontra este prontuário.
+      channelOrThrow(displayPhone, normalizePhoneE164, "Telefone inválido");
+    }
+    patch.displayPhone = displayPhone;
+  }
+
+  if (input.displayEmail !== undefined) {
+    const displayEmail = trimmedOrNull(input.displayEmail);
+    if (displayEmail !== null) {
+      if (displayEmail.length > DISPLAY_EMAIL_MAX) {
+        throw new InvalidCustomerError("E-mail é longo demais");
+      }
+      channelOrThrow(displayEmail, normalizeEmail, "E-mail inválido");
+    }
+    patch.displayEmail = displayEmail;
+  }
+
+  if (input.status !== undefined) {
+    const status = parseProfileStatus(input.status);
+    if (status === null) throw new InvalidCustomerError("Status inválido");
+    patch.status = status;
+  }
+
+  // Corpo vazio não é uma edição — é um pedido malformado. Deixar passar
+  // devolveria 200 sem ter feito nada, que é a resposta mais confusa possível.
+  if (Object.keys(patch).length === 0) {
+    throw new InvalidCustomerError("Nada para atualizar");
+  }
+
+  return patch;
+}
+
+// NOTA: o PATCH mexe SÓ no prontuário deste negócio. Os canais canônicos do
+// `Customer` (email/phoneE164 globais, únicos) não são reescritos daqui — o
+// painel nunca escreve na identidade global (§4, fase 5). Editar o telefone
+// aqui muda para onde ESTE negócio liga, não quem a pessoa é no sistema.
+
+// -----------------------------------------------------------------------------
+// Configuração de CRM por negócio (passo 5)
+// -----------------------------------------------------------------------------
+
+// Espelha os defaults de `BusinessCrmSettings` no schema Prisma. Duplicado de
+// propósito: o GET responde ANTES de a linha existir (o negócio nunca abriu a
+// tela), e responder 404 ali obrigaria o front a conhecer os defaults. Se o
+// schema mudar, este objeto muda junto.
+export const DEFAULT_CRM_SETTINGS = {
+  loyaltyEnabled: false,
+  pointsPerUnit: 1,
+  pointsExpireAfterDays: null,
+  customerLoginEnabled: true,
+} as const;
+
+export const POINTS_PER_UNIT_MAX = 1000;
+export const POINTS_EXPIRE_DAYS_MAX = 3650; // 10 anos
+
+export interface UpdateCrmSettingsInput {
+  loyaltyEnabled?: boolean;
+  pointsPerUnit?: number;
+  pointsExpireAfterDays?: number | null;
+  customerLoginEnabled?: boolean;
+}
+
+export function validateCrmSettingsPatch(
+  input: UpdateCrmSettingsInput,
+): UpdateCrmSettingsInput {
+  const patch: UpdateCrmSettingsInput = {};
+
+  if (input.loyaltyEnabled !== undefined) {
+    if (typeof input.loyaltyEnabled !== "boolean") {
+      throw new InvalidCustomerError("loyaltyEnabled precisa ser booleano");
+    }
+    patch.loyaltyEnabled = input.loyaltyEnabled;
+  }
+
+  if (input.customerLoginEnabled !== undefined) {
+    if (typeof input.customerLoginEnabled !== "boolean") {
+      throw new InvalidCustomerError("customerLoginEnabled precisa ser booleano");
+    }
+    patch.customerLoginEnabled = input.customerLoginEnabled;
+  }
+
+  if (input.pointsPerUnit !== undefined) {
+    if (!Number.isInteger(input.pointsPerUnit) || input.pointsPerUnit < 1) {
+      throw new InvalidCustomerError("pointsPerUnit precisa ser inteiro positivo");
+    }
+    if (input.pointsPerUnit > POINTS_PER_UNIT_MAX) {
+      throw new InvalidCustomerError("pointsPerUnit é alto demais");
+    }
+    patch.pointsPerUnit = input.pointsPerUnit;
+  }
+
+  if (input.pointsExpireAfterDays !== undefined) {
+    // null é o valor com significado: ponto que não expira. Não é ausência.
+    if (input.pointsExpireAfterDays !== null) {
+      if (!Number.isInteger(input.pointsExpireAfterDays) || input.pointsExpireAfterDays < 1) {
+        throw new InvalidCustomerError("pointsExpireAfterDays precisa ser inteiro positivo ou nulo");
+      }
+      if (input.pointsExpireAfterDays > POINTS_EXPIRE_DAYS_MAX) {
+        throw new InvalidCustomerError("pointsExpireAfterDays é alto demais");
+      }
+    }
+    patch.pointsExpireAfterDays = input.pointsExpireAfterDays;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new InvalidCustomerError("Nada para atualizar");
+  }
+
+  return patch;
 }
 
 // -----------------------------------------------------------------------------

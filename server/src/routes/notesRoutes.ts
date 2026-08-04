@@ -5,6 +5,9 @@ import {
   deleteNote,
   getNotes,
   updateNote,
+  CreateNoteBody,
+  CustomerNoteParams,
+  NoteParams,
 } from "../controllers/notesController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
@@ -16,7 +19,7 @@ const staffOrEmployee = authorize(Role.ADMIN, Role.EMPLOYEE);
 
 export async function notesRoutes(app: FastifyInstance): Promise<void> {
   // List notes for a customer
-  app.get<{ Params: { publicId: string } }>(
+  app.get<{ Params: CustomerNoteParams }>(
     "/customers/:publicId/notes",
     {
       schema: {
@@ -36,8 +39,8 @@ export async function notesRoutes(app: FastifyInstance): Promise<void> {
 
   // Create a note for a customer
   app.post<{
-    Params: { publicId: string };
-    Body: { body: string };
+    Params: CustomerNoteParams;
+    Body: CreateNoteBody;
   }>(
     "/customers/:publicId/notes",
     {
@@ -66,8 +69,8 @@ export async function notesRoutes(app: FastifyInstance): Promise<void> {
 
   // Update a note
   app.patch<{
-    Params: { publicId: string; id: string };
-    Body: { body: string };
+    Params: NoteParams;
+    Body: CreateNoteBody;
   }>(
     "/customers/:publicId/notes/:id",
     {
@@ -96,7 +99,7 @@ export async function notesRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // Delete a note
-  app.delete<{ Params: { publicId: string; id: string } }>(
+  app.delete<{ Params: NoteParams }>(
     "/customers/:publicId/notes/:id",
     {
       schema: {

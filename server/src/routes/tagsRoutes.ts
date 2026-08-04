@@ -6,6 +6,8 @@ import {
   deleteTag,
   listTags,
   createTag,
+  CustomerTagParams,
+  TagParams,
 } from "../controllers/tagsController";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
@@ -59,7 +61,7 @@ export async function tagsRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // Delete tag
-  app.delete<{ Params: { tagId: string } }>(
+  app.delete<{ Params: TagParams }>(
     "/tags/:tagId",
     {
       schema: {
@@ -78,7 +80,7 @@ export async function tagsRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // Attach tag to customer
-  app.post<{ Params: { publicId: string; tagId: string } }>(
+  app.post<{ Params: CustomerTagParams }>(
     "/customers/:publicId/tags/:tagId",
     {
       schema: {
@@ -98,7 +100,7 @@ export async function tagsRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // Detach tag from customer
-  app.delete<{ Params: { publicId: string; tagId: string } }>(
+  app.delete<{ Params: CustomerTagParams }>(
     "/customers/:publicId/tags/:tagId",
     {
       schema: {

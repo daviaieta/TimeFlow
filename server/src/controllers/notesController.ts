@@ -1,10 +1,15 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { requireBusinessId } from "../lib/requireBusinessId";
-import { crmService, NoteApi } from "../services/crmService";
-import { NotFoundError, BadRequestError, ForbiddenError } from "../lib/errors";
+import { crmService } from "../services/crmService";
+import { BadRequestError } from "../lib/errors";
 
-export interface NoteParams {
+// O prontuário é endereçado por publicId; a nota, pelo id inteiro dela (que é
+// do negócio, não da identidade global, e por isso pode aparecer na URL).
+export interface CustomerNoteParams {
   publicId: string;
+}
+
+export interface NoteParams extends CustomerNoteParams {
   id: string; // note id as string, but we'll convert to number
 }
 
@@ -13,7 +18,7 @@ export interface CreateNoteBody {
 }
 
 export async function getNotes(
-  request: FastifyRequest<{ Params: NoteParams }>,
+  request: FastifyRequest<{ Params: CustomerNoteParams }>,
   reply: FastifyReply
 ): Promise<void> {
   const businessId = requireBusinessId(request);
@@ -24,7 +29,7 @@ export async function getNotes(
 }
 
 export async function createNote(
-  request: FastifyRequest<{ Params: NoteParams; Body: CreateNoteBody }>,
+  request: FastifyRequest<{ Params: CustomerNoteParams; Body: CreateNoteBody }>,
   reply: FastifyReply
 ): Promise<void> {
   const businessId = requireBusinessId(request);

@@ -1,6 +1,12 @@
-import { CustomerProfileStatus, LoyaltyEntryKind, Prisma } from "@prisma/client";
+import {
+  CustomerLinkSource,
+  CustomerProfileStatus,
+  LoyaltyEntryKind,
+  Prisma,
+} from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { ProfileCursor, ProfileSort } from "../services/customerRules";
+import { customerRepository } from "./customerRepository";
 
 // Repositório do CRM voltado para o painel de negócio (fase 4). Toda função
 // recebe `businessId` como PRIMEIRO argumento posicional — é o mesmo formato
@@ -315,7 +321,13 @@ export const crmRepository = {
     businessId: number,
     noteId: number,
     body: string,
-  ): Promise<{ id: number; body: string; updatedAt: Date }> {
+  ): Promise<{
+    id: number;
+    body: string;
+    createdAt: Date;
+    updatedAt: Date;
+    author: { id: number; name: string } | null;
+  }> {
     // Defesa dupla de tenant: o update só toca nota DESTE negócio. O
     // Prisma `update` não aceita um where composto não-único, então
     // `updateMany` com `{ id, businessId }` é a trava — count 0 significa que
@@ -329,7 +341,7 @@ export const crmRepository = {
 
     return prisma.customerNote.findFirstOrThrow({
       where: { businessId, id: noteId },
-      select: { id: true, body: true, updatedAt: true },
+      select: NOTE_SELECT,
     });
   },
 
@@ -360,10 +372,11 @@ export const crmRepository = {
     // Aqui, insert idempotente seguido de re-leitura.
     await prisma.customerTag.createMany({
       data: [{ businessId, name, color }],
+      skipDuplicates: true,
     });
     return prisma.customerTag.findFirstOrThrow({
       where: { businessId, name },
-      select: { id: true, name: true, color: true },
+      select: { ...TAG_SUMMARY_SELECT, createdAt: true },
     });
   },
 
@@ -539,6 +552,68 @@ export const crmRepository = {
     ]);
 
     return { total, active, blocked, newThisMonth, topSpenders };
+  },
+
+  // -------- Cadastro pela equipe -------------------------------------------
+
+  // Cliente criado no balcão. A identidade NÃO é resolvida aqui: quem decide é
+  // `customerRepository.linkForBooking`, o mesmo caminho da reserva pública, com
+  // a ordem do §4.1 intacta (canal verificado > provisional já ligado a este
+  // negócio > identidade nova reivindicando só canal livre). Reusar em vez de
+  // reimplementar é o ponto: uma segunda resolução de identidade seria uma
+  // segunda chance de errar a fusão, que é a falha do §11.1.
+  //
+  // `linkForBooking` recebe o `tx` de fora justamente para poder ser chamada
+  // assim. O que muda em relação à reserva é só `source: STAFF` e o fato de
+  // nenhum agregado ser tocado — cadastro não é reserva, então bookingsCount,
+  // totalSpent e as datas continuam zerados/nulos.
+  async createProfileForBusiness(
+    businessId: number,
+    input: {
+      displayName: string;
+      displayPhone: string | null;
+      displayEmail: string | null;
+      email: string | null;
+      phoneE164: string | null;
+    },
+  ): Promise<{ profile: ProfileSummary; created: boolean }> {
+    return prisma.$transaction(async (tx) => {
+      // Pré-checagem escopada a ESTE negócio: se o contato já tem prontuário
+      // aqui, o cadastro devolve o que existe em vez de duplicar. É o mesmo
+      // efeito do passo 2 do §4.1 (que o linkForBooking aplicaria de qualquer
+      // forma) — o que ela acrescenta é poder dizer ao painel se criou ou
+      // reaproveitou, para a tela não anunciar "cliente criado" ao reencontrar
+      // um regular.
+      const channels: Prisma.CustomerWhereInput[] = [];
+      if (input.email !== null) channels.push({ email: input.email });
+      if (input.phoneE164 !== null) channels.push({ phoneE164: input.phoneE164 });
+
+      if (channels.length > 0) {
+        const existing = await tx.customerProfile.findFirst({
+          where: { businessId, customer: { mergedIntoId: null, OR: channels } },
+          select: PROFILE_SUMMARY_SELECT,
+        });
+        if (existing) return { profile: existing, created: false };
+      }
+
+      const { profileId } = await customerRepository.linkForBooking(tx, {
+        businessId,
+        clientName: input.displayName,
+        email: input.email,
+        phoneE164: input.phoneE164,
+        displayPhone: input.displayPhone,
+        displayEmail: input.displayEmail,
+        bookedAt: new Date(),
+        source: CustomerLinkSource.STAFF,
+      });
+
+      const profile = await tx.customerProfile.findUniqueOrThrow({
+        where: { id: profileId },
+        select: PROFILE_SUMMARY_SELECT,
+      });
+
+      return { profile, created: true };
+    });
   },
 
   // -------- Edição de prontuário (display fields + status) -----------------

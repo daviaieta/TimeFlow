@@ -3,8 +3,12 @@ import { crmRepository, ListProfilesFilter, ProfileSummary } from "../repositori
 import { BadRequestError, ForbiddenError, NotFoundError } from "../lib/errors";
 import {
   BookingCursor,
+  DEFAULT_CRM_SETTINGS,
   ProfileCursor,
   ProfileSort,
+  UpdateCrmSettingsInput,
+  ValidatedCustomerInput,
+  ValidatedCustomerPatch,
   clampPageSize,
   decodeBookingCursor,
   decodeProfileCursor,
@@ -13,7 +17,6 @@ import {
   parseProfileSort,
   parseProfileStatus,
 } from "./customerRules";
-import { Note } from "@prisma/client";
 
 // Serviço do CRM de negócio (fase 4). Thin: a lógica de decisão pura mora em
 // customerRules, o acesso a dado mora em crmRepository. Aqui só fica o que
@@ -114,6 +117,13 @@ function toProfileApi(
   };
 }
 
+// Anexa as etiquetas de UM prontuário reusando a leitura em batch — a mesma
+// função que a listagem usa, para detalhe e lista nunca divergirem na forma.
+async function withTags(businessId: number, profile: ProfileSummary): Promise<ProfileApi> {
+  const tagsByProfile = await crmRepository.listTagsForProfiles(businessId, [profile.id]);
+  return toProfileApi(profile, tagsByProfile.get(profile.id) ?? []);
+}
+
 export interface BookingApi {
   id: number;
   createdAt: string;
@@ -197,6 +207,45 @@ function toLoyaltyEntryApi(entry: {
   };
 }
 
+// Configuração de CRM do negócio. `businessId` NÃO sai na resposta: o cliente
+// da API já sabe qual negócio é (o token diz), e não expor id interno é a regra
+// que vale para toda a superfície do CRM.
+export interface CrmSettingsApi {
+  loyaltyEnabled: boolean;
+  pointsPerUnit: number;
+  pointsExpireAfterDays: number | null;
+  customerLoginEnabled: boolean;
+}
+
+function toSettingsApi(row: {
+  loyaltyEnabled: boolean;
+  pointsPerUnit: number;
+  pointsExpireAfterDays: number | null;
+  customerLoginEnabled: boolean;
+}): CrmSettingsApi {
+  return {
+    loyaltyEnabled: row.loyaltyEnabled,
+    pointsPerUnit: row.pointsPerUnit,
+    pointsExpireAfterDays: row.pointsExpireAfterDays,
+    customerLoginEnabled: row.customerLoginEnabled,
+  };
+}
+
+// Métricas do painel. Mesmo tratamento do totalSpent da listagem: Decimal vira
+// string, nunca number.
+export interface CrmMetricsApi {
+  total: number;
+  active: number;
+  blocked: number;
+  newThisMonth: number;
+  topSpenders: {
+    publicId: string;
+    displayName: string;
+    bookingsCount: number;
+    totalSpent: string;
+  }[];
+}
+
 // Loyalty keyset cursor: (createdAt DESC, id DESC)
 interface LoyaltyCursor {
   createdAt: Date;
@@ -276,8 +325,82 @@ export const crmService = {
     const profile = await crmRepository.findProfileByPublicId(businessId, publicId);
     if (!profile) throw new NotFoundError("Customer not found");
 
-    const tagsByProfile = await crmRepository.listTagsForProfiles(businessId, [profile.id]);
-    return toProfileApi(profile, tagsByProfile.get(profile.id) ?? []);
+    return withTags(businessId, profile);
+  },
+
+  // -------- Cadastro e edição pela equipe ------------------------------------
+
+  // O prontuário volta inteiro (mesma forma do GET), e `created` diz se nasceu
+  // agora ou se o contato já tinha prontuário aqui. O controller traduz isso em
+  // 201 vs 200 — mesmo par que o ADJUST idempotente da fidelidade usa.
+  async createProfile(
+    businessId: number,
+    input: ValidatedCustomerInput,
+  ): Promise<{ profile: ProfileApi; created: boolean }> {
+    const { profile, created } = await crmRepository.createProfileForBusiness(businessId, {
+      displayName: input.displayName,
+      displayPhone: input.displayPhone,
+      displayEmail: input.displayEmail,
+      email: input.email,
+      phoneE164: input.phoneE164,
+    });
+
+    return { profile: await withTags(businessId, profile), created };
+  },
+
+  async updateProfile(
+    businessId: number,
+    publicId: string,
+    patch: ValidatedCustomerPatch,
+  ): Promise<ProfileApi> {
+    const updated = await crmRepository.updateProfileDisplay(businessId, publicId, patch);
+    // null = o publicId não é deste negócio. 404, nunca 403 (§11.4).
+    if (!updated) throw new NotFoundError("Customer not found");
+
+    // O update devolve só os campos que ele escreve; a resposta do PATCH é o
+    // prontuário completo, igual à do GET, para o painel não precisar de duas
+    // formas do mesmo objeto. Uma releitura extra numa escrita rara.
+    const profile = await crmRepository.findProfileByPublicId(businessId, publicId);
+    if (!profile) throw new NotFoundError("Customer not found");
+
+    return withTags(businessId, profile);
+  },
+
+  // -------- Configuração de CRM ----------------------------------------------
+
+  // A linha de configuração é criada só no primeiro PATCH. Até lá o GET
+  // responde os defaults do schema em vez de 404: para o painel, "nunca
+  // configurado" e "configurado com os defaults" são o mesmo estado.
+  async getSettings(businessId: number): Promise<CrmSettingsApi> {
+    const row = await crmRepository.getSettings(businessId);
+    return row ? toSettingsApi(row) : { ...DEFAULT_CRM_SETTINGS };
+  },
+
+  async updateSettings(
+    businessId: number,
+    patch: UpdateCrmSettingsInput,
+  ): Promise<CrmSettingsApi> {
+    const row = await crmRepository.upsertSettings(businessId, patch);
+    return toSettingsApi(row);
+  },
+
+  // -------- Métricas ----------------------------------------------------------
+
+  async getMetrics(businessId: number): Promise<CrmMetricsApi> {
+    const metrics = await crmRepository.crmMetrics(businessId, new Date());
+
+    return {
+      total: metrics.total,
+      active: metrics.active,
+      blocked: metrics.blocked,
+      newThisMonth: metrics.newThisMonth,
+      topSpenders: metrics.topSpenders.map((spender) => ({
+        publicId: spender.publicId,
+        displayName: spender.displayName,
+        bookingsCount: spender.bookingsCount,
+        totalSpent: spender.totalSpent.toString(),
+      })),
+    };
   },
 
   // -------- Histórico de reservas --------------------------------------------

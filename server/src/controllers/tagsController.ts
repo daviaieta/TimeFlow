@@ -1,10 +1,10 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { requireBusinessId } from "../lib/requireBusinessId";
-import { crmService, TagApi } from "../services/crmService";
-import { NotFoundError, BadRequestError } from "../lib/errors";
+import { crmService } from "../services/crmService";
+import { BadRequestError } from "../lib/errors";
 
+// businessId nunca vem da URL — vem do token, via requireBusinessId.
 export interface TagParams {
-  businessId: number; // not used in params, but we'll get from requireBusinessId
   tagId: string;
 }
 
