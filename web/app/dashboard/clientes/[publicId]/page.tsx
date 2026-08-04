@@ -1,101 +1,189 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { fetchAdapter } from '@/adapters/fetchAdapter';
-import { Link } from '@/components/ui/link';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { NotFound } from '@/components/not-found';
-import { Badge } from '@/components/ui/badge';
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowLeft01Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
+import { ApiError, fetchAdapter } from "@/adapters/fetchAdapter";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { customerStatusLabels, formatDate } from "@/lib/crm";
+import { formatCurrency } from "@/lib/dashboard";
+import { CustomerProfile } from "@/lib/types";
+import { CustomerFormDialog } from "../customer-form-dialog";
+import { CustomerBookings } from "./customer-bookings";
+import { CustomerLoyalty } from "./customer-loyalty";
+import { CustomerNotes } from "./customer-notes";
+import { CustomerTags } from "./customer-tags";
 
-export default function CustomerPage({ params }: { params: { publicId: string } }) {
-  const [customer, setCustomer] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+// Prontuário do cliente. Tudo o que a equipe precisa numa tela só — histórico,
+// observações, fidelidade e etiquetas — porque no balcão ninguém navega entre
+// abas com o cliente esperando.
+//
+// `useParams` em vez de receber `params`: em client component é o jeito de ler
+// a rota dinâmica sem lidar com a Promise que o Next passa para o servidor.
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-2xl border bg-card p-4 shadow-sm">
+      <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl leading-none font-semibold tracking-tight tabular-nums">
+        {value}
+      </p>
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+export default function CustomerDetailPage() {
+  const params = useParams<{ publicId: string }>();
+  const publicId = params.publicId;
+
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const load = useCallback(() => {
+    return fetchAdapter<{ profile: CustomerProfile }>({
+      method: "GET",
+      path: `/customers/${publicId}`,
+    })
+      .then(({ data }) => {
+        setProfile(data.profile);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(
+          err instanceof ApiError && err.status === 404
+            ? "Cliente não encontrado neste negócio."
+            : err instanceof ApiError
+              ? err.message
+              : "Erro inesperado.",
+        );
+      });
+  }, [publicId]);
 
   useEffect(() => {
-    async function fetchCustomer() {
-      try {
-        setLoading(true);
-        const { data } = await fetchAdapter<{ profile: any }>({
-          method: 'GET',
-          path: `/customers/${params.publicId}`,
-        });
-        setCustomer(data.profile);
-        setError(null);
-      } catch (err: any) {
-        setError(err.message || 'Customer not found');
-      } finally {
-        setLoading(false);
-      }
-    }
+    load();
+  }, [load]);
 
-    if (params.publicId) {
-      fetchCustomer();
-    }
-  }, [params.publicId]);
+  if (error) {
+    return (
+      <div className="mx-auto w-full max-w-5xl">
+        <Link
+          href="/dashboard/clientes"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+          Clientes
+        </Link>
+        <p className="mt-8 rounded-2xl border bg-card p-12 text-center text-sm text-destructive shadow-sm">
+          {error}
+        </p>
+      </div>
+    );
+  }
 
-  if (loading) return <Spinner />;
-  if (error) return <NotFound message={error} />;
+  if (!profile) {
+    return (
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+        <Skeleton className="h-8 w-48 rounded-xl" />
+        <Skeleton className="h-28 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold">{customer.displayName}</h1>
-        <div className="flex flex-col sm:flex-row sm:space-x-3">
-          <Link href={`/dashboard/clientes/${customer.publicId}/notes`}>
-            <button className="btn btn-primary">Notes</button>
-          </Link>
-          <Link href={`/dashboard/clientes/${customer.publicId}/bookings`}>
-            <button className="btn btn-outline">Bookings</button>
-          </Link>
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-5xl">
+      <Link
+        href="/dashboard/clientes"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+        Clientes
+      </Link>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <h2 className="font-semibold mb-2">Contact</h2>
-          <p className="text-muted-foreground">
-            {customer.displayPhone || 'No phone'}
-          </p>
-          {customer.displayEmail ? (
-            <p className="text-muted-foreground">{customer.displayEmail}</p>
-          ) : null}
-        </div>
-        <div>
-          <h2 className="font-semibold mb-2">Details</h2>
-          <p className="text-muted-foreground">
-            Status:
-            <Badge variant={customer.status === 'ACTIVE' ? 'secondary' : 'destructive'}>
-              {customer.status}
-            </Badge>
-          </p>
-          <p className="text-muted-foreground">
-            Customer since: {new Date(customer.createdAt).toLocaleDateString()}
-          </p>
-          <p className="text-muted-foreground">
-            Total spent: {customer.totalSpent}
-          </p>
-          <p className="text-muted-foreground">
-            Number of bookings: {customer.bookingsCount}
-          </p>
-        </div>
-      </div>
-
-      <div className="border-t pt-4">
-        <h2 className="font-semibold mb-2">Tags</h2>
-        {customer.tags.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {customer.tags.map((tag: any) => (
-              <span key={tag.id} className="badge badge-outline" style={{ backgroundColor: tag.color }}>
-                {tag.name}
-              </span>
-            ))}
+      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">
+              {profile.displayName}
+            </h1>
+            {profile.status === "BLOCKED" && (
+              <Badge variant="destructive">{customerStatusLabels.BLOCKED}</Badge>
+            )}
           </div>
-        ) : (
-          <p className="text-muted-foreground">No tags</p>
-        )}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {profile.displayPhone ?? "Sem telefone"}
+            {profile.displayEmail ? ` · ${profile.displayEmail}` : ""}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Cliente desde {formatDate(profile.createdAt)}
+          </p>
+        </div>
+
+        <Button
+          variant="outline"
+          className="w-full sm:w-auto"
+          onClick={() => setEditOpen(true)}
+        >
+          <HugeiconsIcon icon={PencilEdit02Icon} data-icon="inline-start" />
+          Editar
+        </Button>
       </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <Stat
+          label="Reservas"
+          value={String(profile.bookingsCount)}
+          hint={
+            profile.lastBookedAt
+              ? `última em ${formatDate(profile.lastBookedAt)}`
+              : "nenhuma ainda"
+          }
+        />
+        <Stat
+          label="Valor reservado"
+          value={formatCurrency(profile.totalSpent)}
+          hint={
+            profile.spendIsEstimated
+              ? "estimativa: inclui reservas sem preço registrado"
+              : "valor reservado, não liquidado"
+          }
+        />
+        <Stat
+          label="Pontos"
+          value={String(profile.loyaltyPoints)}
+          hint="saldo de fidelidade"
+        />
+      </div>
+
+      <div className="mt-4 flex flex-col gap-4">
+        <CustomerTags profile={profile} onChanged={load} />
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CustomerBookings publicId={profile.publicId} />
+          <CustomerLoyalty
+            publicId={profile.publicId}
+            balance={profile.loyaltyPoints}
+            onChanged={load}
+          />
+        </div>
+
+        <CustomerNotes publicId={profile.publicId} />
+      </div>
+
+      <CustomerFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        editing={profile}
+        onSaved={(saved) => setProfile(saved)}
+      />
     </div>
   );
 }

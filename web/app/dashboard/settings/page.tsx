@@ -2,6 +2,7 @@
 
 import { BillingCard } from "./billing-card";
 import { BusinessCard } from "./business-card";
+import { CrmCard } from "./crm-card";
 import { PasswordCard } from "./password-card";
 import { ProfileCard } from "./profile-card";
 import { useAuthUser, useBillingEnabled } from "../auth-context";
@@ -34,6 +35,8 @@ export default function SettingsPage() {
               />
             ) : null}
             <BusinessCard business={user.business} />
+            {/* Some sozinho quando o CRM está desligado no servidor. */}
+            <CrmCard />
           </>
         ) : null}
       </div>
