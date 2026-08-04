@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   appendProfiles,
+  applyProfileToBookingForm,
   buildCustomersQuery,
   customerContactLine,
   formatBookingWhen,
@@ -9,6 +10,7 @@ import {
   formatDate,
   formatPoints,
   isValidTagColor,
+  shouldSearchCustomers,
   validateAdjustForm,
 } from "./crm.ts";
 import type { CustomerBooking, CustomerProfile } from "./types";
@@ -146,4 +148,55 @@ test("isValidTagColor exige hex de 6 dígitos", () => {
   assert.ok(!isValidTagColor("#fff"));
   assert.ok(!isValidTagColor("laranja"));
   assert.ok(!isValidTagColor("1a2b3c"));
+});
+
+test("shouldSearchCustomers ignora termo curto ou em branco", () => {
+  assert.ok(!shouldSearchCustomers(""));
+  assert.ok(!shouldSearchCustomers("   "));
+  assert.ok(!shouldSearchCustomers("d"));
+  assert.ok(!shouldSearchCustomers(" d "), "espaço não conta como caractere de busca");
+  assert.ok(shouldSearchCustomers("da"));
+  assert.ok(shouldSearchCustomers("Davi Aieta"));
+});
+
+test("applyProfileToBookingForm preenche a reserva com o cadastro", () => {
+  const form = { clientName: "", clientPhone: "", clientEmail: "" };
+
+  assert.deepEqual(
+    applyProfileToBookingForm(form, {
+      displayName: "Davi Aieta",
+      displayPhone: "(11) 99999-8888",
+      displayEmail: "davi@x.test",
+    }),
+    {
+      clientName: "Davi Aieta",
+      clientPhone: "(11) 99999-8888",
+      clientEmail: "davi@x.test",
+    },
+  );
+});
+
+// O caso que motiva a função existir: o prontuário tem só o telefone, e a
+// atendente já digitou o e-mail que o cliente acabou de ditar. Sobrescrever com
+// null apagaria o que ela tinha na tela.
+test("applyProfileToBookingForm não apaga o que o cadastro não tem", () => {
+  const form = {
+    clientName: "rascunho",
+    clientPhone: "11912345678",
+    clientEmail: "novo@x.test",
+  };
+
+  assert.deepEqual(
+    applyProfileToBookingForm(form, {
+      displayName: "Davi Aieta",
+      displayPhone: null,
+      displayEmail: null,
+    }),
+    {
+      // O nome, sim, vem do cadastro: é o campo que identifica quem foi escolhido.
+      clientName: "Davi Aieta",
+      clientPhone: "11912345678",
+      clientEmail: "novo@x.test",
+    },
+  );
 });

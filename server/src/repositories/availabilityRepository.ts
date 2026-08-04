@@ -13,6 +13,13 @@ const withBooking = {
       clientPhone: true,
       clientEmail: true,
       service: { select: { id: true, name: true } },
+      // O prontuário deste negócio, quando a reserva tem um. Null com o CRM
+      // desligado e nas reservas antigas que o backfill não resolveu — a
+      // agenda trata os dois casos igual: sem link.
+      //
+      // Só publicId e displayName: é o que o chip precisa, e o id interno do
+      // prontuário (como o do Customer) não sai do servidor.
+      profile: { select: { publicId: true, displayName: true } },
     },
   },
 };

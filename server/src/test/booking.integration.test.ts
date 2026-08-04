@@ -193,6 +193,33 @@ test("com o CRM desligado, a reserva não cria identidade nem prontuário", asyn
   assert.equal(booking.clientEmail, "davi@exemplo.test");
 });
 
+// Fase 4, passo 6. Com a flag desligada as rotas de CRM nem são registradas, e
+// prontuário nenhum existe — então a resposta honesta para "reserve para o
+// cliente X" é a mesma de um cliente inexistente. 404, não 400 nem um sucesso
+// que ignora o campo em silêncio: ignorar criaria uma reserva desvinculada que
+// o painel acha que vinculou.
+test("com o CRM desligado, fixar prontuário é 404", async () => {
+  const { business, admin, service, slots } = await seedBookableBusiness("crm-off-fixado");
+  const token = app.jwt.sign({ sub: admin.id, role: admin.role, businessId: business.id });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/bookings",
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      ...bookingPayload(slots[0].id, service.id, "Davi"),
+      profilePublicId: "3f1c2b4a-5d6e-4f70-8912-abcdef012345",
+    },
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(await testPrisma.booking.count(), 0);
+
+  // E o horário continua livre: a recusa acontece antes do claim.
+  const slot = await testPrisma.availability.findUniqueOrThrow({ where: { id: slots[0].id } });
+  assert.equal(slot.isBooked, false);
+});
+
 // Fase 0 do CRM: a reserva grava o próprio tenant. O que o teste tranca é a
 // invariante que o backfill garantiu para o passado e o código tem que manter
 // no futuro — Booking.businessId é SEMPRE o businessId do serviço reservado.

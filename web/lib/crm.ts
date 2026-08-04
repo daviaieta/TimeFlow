@@ -153,3 +153,33 @@ const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 export function isValidTagColor(color: string): boolean {
   return HEX_COLOR.test(color);
 }
+
+// -----------------------------------------------------------------------------
+// Autocomplete de cliente na reserva do balcão
+// -----------------------------------------------------------------------------
+
+// Uma letra só casa com metade da carteira: a lista devolvida não ajudaria a
+// escolher e a busca sairia a cada tecla do nome. Duas é onde o resultado
+// começa a significar alguma coisa.
+export const CUSTOMER_SEARCH_MIN_LENGTH = 2;
+
+export function shouldSearchCustomers(term: string): boolean {
+  return term.trim().length >= CUSTOMER_SEARCH_MIN_LENGTH;
+}
+
+// A atendente escolheu um prontuário: os campos da reserva passam a nascer do
+// cadastro. Continuam editáveis — o que for digitado por cima vira o retrato do
+// ato (§15.5) sem desfazer o vínculo, que é o ponto de fixar o prontuário.
+//
+// Campo nulo no cadastro NÃO apaga o que já está no formulário: quem tem só o
+// telefone no prontuário e acabou de ditar o e-mail perderia o e-mail.
+export function applyProfileToBookingForm(
+  form: { clientName: string; clientPhone: string; clientEmail: string },
+  profile: { displayName: string; displayPhone: string | null; displayEmail: string | null },
+): { clientName: string; clientPhone: string; clientEmail: string } {
+  return {
+    clientName: profile.displayName,
+    clientPhone: profile.displayPhone ?? form.clientPhone,
+    clientEmail: profile.displayEmail ?? form.clientEmail,
+  };
+}

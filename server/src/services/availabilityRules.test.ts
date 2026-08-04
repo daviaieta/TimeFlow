@@ -37,6 +37,7 @@ test("slot reservado carrega cliente e serviço do booking", () => {
       clientPhone: "11999998888",
       clientEmail: null,
       service: { id: 4, name: "Corte Masculino" },
+      profile: null,
     },
   });
 
@@ -44,6 +45,34 @@ test("slot reservado carrega cliente e serviço do booking", () => {
   assert.equal(dto.booking?.service.name, "Corte Masculino");
   assert.equal(dto.date, "2026-08-10T00:00:00.000Z");
   assert.equal(dto.isBooked, true);
+});
+
+// O que a atendente digitou e o cadastro do prontuário são campos distintos, e
+// o DTO tem que preservar os dois: é o que permite a agenda mostrar o nome do
+// ato e linkar para um cadastro já corrigido.
+test("slot reservado carrega o prontuário quando a reserva tem um", () => {
+  const dto = toAvailabilityDto({
+    id: 5,
+    date: new Date("2026-08-10T00:00:00.000Z"),
+    startTime: "14:00",
+    endTime: "15:00",
+    isBooked: true,
+    booking: {
+      id: 11,
+      clientName: "Davi",
+      clientPhone: "11999998888",
+      clientEmail: null,
+      service: { id: 4, name: "Corte Masculino" },
+      profile: {
+        publicId: "3f1c2b4a-5d6e-4f70-8912-abcdef012345",
+        displayName: "Davi Aieta",
+      },
+    },
+  });
+
+  assert.equal(dto.booking?.clientName, "Davi");
+  assert.equal(dto.booking?.profile?.displayName, "Davi Aieta");
+  assert.equal(dto.booking?.profile?.publicId, "3f1c2b4a-5d6e-4f70-8912-abcdef012345");
 });
 
 test("utcMidnight zera a hora e mantém o dia UTC", () => {

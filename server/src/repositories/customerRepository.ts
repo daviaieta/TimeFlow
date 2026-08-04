@@ -32,6 +32,11 @@ export interface BookingIdentityInput {
   displayEmail: string | null;
   bookedAt: Date;
   source: CustomerLinkSource;
+  // Prontuário escolhido explicitamente no balcão (autocomplete do painel). Já
+  // validado contra o tenant por quem chama. Quando vem preenchido, NÃO há o
+  // que resolver: a atendente disse quem é o cliente, e adivinhar por canal em
+  // cima disso só criaria chance de errar. Null no fluxo público, sempre.
+  pinnedProfileId: number | null;
 }
 
 const EXISTING_SELECT = {
@@ -225,6 +230,20 @@ export const customerRepository = {
     tx: Prisma.TransactionClient,
     input: BookingIdentityInput,
   ): Promise<{ customerId: number; profileId: number }> {
+    // Atalho do balcão: prontuário já escolhido, resolução por canal não roda.
+    // O `businessId` volta no predicado mesmo com o serviço já tendo conferido
+    // — a trava de tenant vale no ponto da ESCRITA, não só na leitura que a
+    // precedeu. `OrThrow` porque, hoje, nada apaga prontuário: se este SELECT
+    // não encontra a linha, o estado é inesperado e abortar a transação (sem
+    // reservar nada) é a resposta certa.
+    if (input.pinnedProfileId !== null) {
+      const pinned = await tx.customerProfile.findFirstOrThrow({
+        where: { id: input.pinnedProfileId, businessId: input.businessId },
+        select: { id: true, customerId: true },
+      });
+      return { customerId: pinned.customerId, profileId: pinned.id };
+    }
+
     const customerId = await resolveCustomerId(tx, input);
 
     // Mesma técnica de sempre: o unique [customerId, businessId] absorve duas

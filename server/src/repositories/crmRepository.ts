@@ -189,20 +189,6 @@ export const crmRepository = {
     });
   },
 
-  // Resolve um conjunto de publicIds em um único SELECT. Usado pela rota de
-  // criação de reserva para validar "cliente X existe aqui?" sem expor a
-  // identidade global e sem N+1.
-  async findProfilesByPublicIds(
-    businessId: number,
-    publicIds: string[],
-  ): Promise<ProfileSummary[]> {
-    if (publicIds.length === 0) return [];
-    return prisma.customerProfile.findMany({
-      where: { businessId, publicId: { in: publicIds } },
-      select: PROFILE_SUMMARY_SELECT,
-    });
-  },
-
   // Tags de vários prontuários em um SELECT só. Sem isto, a lista de 20
   // prontuários vira 21 queries (uma por linha).
   async listTagsForProfiles(
@@ -599,6 +585,10 @@ export const crmRepository = {
       const { profileId } = await customerRepository.linkForBooking(tx, {
         businessId,
         clientName: input.displayName,
+        // Cadastro pelo balcão parte do contato digitado: é justamente a
+        // resolução por canal que se quer aqui. Fixar prontuário é o caso
+        // oposto (a atendente já escolheu um), e não existe neste fluxo.
+        pinnedProfileId: null,
         email: input.email,
         phoneE164: input.phoneE164,
         displayPhone: input.displayPhone,

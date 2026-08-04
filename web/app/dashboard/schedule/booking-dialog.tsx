@@ -22,7 +22,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import type { EmployeeServiceLink } from "@/lib/types";
+import { applyProfileToBookingForm } from "@/lib/crm";
+import type { CustomerProfile, EmployeeServiceLink } from "@/lib/types";
+import { CustomerPicker } from "./customer-picker";
 
 interface BookingDialogProps {
   slotId: number;
@@ -45,8 +47,25 @@ export function BookingDialog({
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
+  const [customer, setCustomer] = useState<CustomerProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Escolher um cliente preenche o formulário; desescolher NÃO limpa o que já
+  // está lá. A atendente que clicou em "Trocar" quer corrigir o vínculo, não
+  // redigitar o telefone.
+  function selectCustomer(profile: CustomerProfile | null) {
+    setCustomer(profile);
+    if (!profile) return;
+
+    const filled = applyProfileToBookingForm(
+      { clientName, clientPhone, clientEmail },
+      profile,
+    );
+    setClientName(filled.clientName);
+    setClientPhone(filled.clientPhone);
+    setClientEmail(filled.clientEmail);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,6 +82,9 @@ export function BookingDialog({
           clientName: clientName.trim(),
           clientPhone: clientPhone.trim(),
           ...(clientEmail.trim() ? { clientEmail: clientEmail.trim() } : {}),
+          // Presente só quando a atendente escolheu alguém. Sem ele o servidor
+          // resolve a identidade pelo contato digitado, como sempre fez.
+          ...(customer ? { profilePublicId: customer.publicId } : {}),
         },
       });
       onClose();
@@ -107,6 +129,7 @@ export function BookingDialog({
                 </SelectContent>
               </Select>
             </Field>
+            <CustomerPicker selected={customer} onSelect={selectCustomer} />
             <Field>
               <FieldLabel htmlFor="booking-name">Nome do cliente</FieldLabel>
               <Input

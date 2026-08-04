@@ -28,6 +28,14 @@ export interface BookingSummary {
   clientPhone: string;
   clientEmail: string | null;
   service: EmployeeServiceLink;
+  // O prontuário do CRM, quando a reserva tem um. Null com o CRM desligado e
+  // nas reservas antigas que o backfill não conseguiu resolver — a agenda
+  // trata os dois casos igual: mostra a reserva, sem link.
+  //
+  // clientName acima é o que foi digitado no ato; displayName é o cadastro,
+  // que pode ter sido corrigido depois. Mostrar os dois quando divergem evita
+  // a pergunta "esse é o mesmo cliente?".
+  profile: { publicId: string; displayName: string } | null;
 }
 
 export interface Availability {

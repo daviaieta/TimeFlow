@@ -9,6 +9,9 @@ function booking(overrides: Partial<BookingSummary> & { id: number }): BookingSu
     clientPhone: "11999998888",
     clientEmail: null,
     service: { id: 1, name: "Corte Masculino" },
+    // A timeline não lê o prontuário — quem usa é o diálogo de detalhe. O
+    // default é o caso mais comum de qualquer forma: reserva sem vínculo.
+    profile: null,
     ...overrides,
   };
 }
